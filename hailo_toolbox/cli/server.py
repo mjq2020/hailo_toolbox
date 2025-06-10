@@ -52,7 +52,7 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     log_level = logging.DEBUG if verbose else logging.INFO
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     
-    logger = logging.getLogger('hailo_tools.server')
+    logger = logging.getLogger('hailo_toolbox.server')
     logger.setLevel(log_level)
     
     # Console handler

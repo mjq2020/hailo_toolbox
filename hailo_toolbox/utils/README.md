@@ -1,13 +1,13 @@
 # 日志模块使用说明
 
-`hailo_tools.utils.logging` 模块提供了整个项目的日志记录功能，便于开发和调试。
+`hailo_toolbox.utils.logging` 模块提供了整个项目的日志记录功能，便于开发和调试。
 
 ## 基本用法
 
 ### 获取日志记录器
 
 ```python
-from hailo_tools.utils import get_logger
+from hailo_toolbox.utils import get_logger
 
 # 获取或创建一个记录器，建议使用模块名作为记录器名称
 logger = get_logger(__name__)
@@ -23,7 +23,7 @@ logger.critical("这是严重错误信息")
 ### 自定义日志记录器
 
 ```python
-from hailo_tools.utils import setup_logger
+from hailo_toolbox.utils import setup_logger
 
 # 创建一个详细配置的记录器
 logger = setup_logger(
@@ -54,7 +54,7 @@ logger = setup_logger(
 
 ```python
 # cli/convert.py
-from hailo_tools.utils import setup_logger
+from hailo_toolbox.utils import setup_logger
 
 def main():
     # 解析命令行参数
@@ -64,7 +64,7 @@ def main():
     log_level = "DEBUG" if args.verbose else "INFO"
     
     # 配置日志
-    logger = setup_logger("hailo_tools.convert", level=log_level)
+    logger = setup_logger("hailo_toolbox.convert", level=log_level)
     
     # 使用日志
     logger.info("开始转换模型...")
@@ -76,15 +76,15 @@ def main():
 
 ```python
 # 主模块设置
-main_logger = setup_logger("hailo_tools.inference", level="INFO")
+main_logger = setup_logger("hailo_toolbox.inference", level="INFO")
 
 # 子模块继承主模块的设置
 # 方式1：使用相同前缀，自动继承
-onnx_logger = get_logger("hailo_tools.inference.onnx")
+onnx_logger = get_logger("hailo_toolbox.inference.onnx")
 
 # 方式2：显式设置继承
 pipeline_logger = setup_logger(
-    "hailo_tools.inference.pipeline", 
+    "hailo_toolbox.inference.pipeline", 
     level="DEBUG",
     propagate=True  # 将日志传递给上级记录器
 )
@@ -121,8 +121,8 @@ pipeline_logger = setup_logger(
    ```
 
 4. **使用记录器名称层次结构**：
-   - 主模块：`hailo_tools`
-   - 子模块：`hailo_tools.converters`
-   - 具体类：`hailo_tools.converters.pytorch`
+   - 主模块：`hailo_toolbox`
+   - 子模块：`hailo_toolbox.converters`
+   - 具体类：`hailo_toolbox.converters.pytorch`
 
 这样可以更容易地根据模块调整日志级别和处理方式。 

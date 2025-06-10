@@ -11,13 +11,13 @@ import tempfile
 import os
 import cv2
 from pathlib import Path
-from hailo_tools.process.interface import Pipeline, ProcessingStage, DataType, PipelineConfig
-from hailo_tools.process.adapters import (
+from hailo_toolbox.process.interface import Pipeline, ProcessingStage, DataType, PipelineConfig
+from hailo_toolbox.process.adapters import (
     ImageSourceAdapter, PreprocessorAdapter, InferenceAdapter, 
     PostprocessorAdapter, VisualizationAdapter, OutputAdapter
 )
-from hailo_tools.process.preprocessor import PreprocessConfig
-from hailo_tools.process.base import PostprocessConfig
+from hailo_toolbox.process.preprocessor import PreprocessConfig
+from hailo_toolbox.process.base import PostprocessConfig
 
 # Enable all warnings and convert them to exceptions for array truth values
 warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)

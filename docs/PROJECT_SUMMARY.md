@@ -62,7 +62,7 @@
 
 ### 目录结构
 ```
-hailo_tools/sources/
+hailo_toolbox/sources/
 ├── __init__.py          # 主入口，源类型检测和创建
 ├── base.py              # 抽象基类定义
 ├── file.py              # 图像和视频源实现
@@ -123,7 +123,7 @@ BaseSource (抽象基类)
 
 ### 基本使用
 ```python
-from hailo_tools.sources import create_source
+from hailo_toolbox.sources import create_source
 
 # 自动检测并创建源
 source = create_source("path/to/video.mp4")

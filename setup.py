@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="hailo_tools",
+    name="hailo_toolbox",
     version="0.1.0",
     packages=find_packages(),
     install_requires=[
@@ -15,9 +15,9 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "dl-convert=hailo_tools.cli.convert:main",
-            "dl-infer=hailo_tools.cli.infer:main",
-            "dl-server=hailo_tools.cli.server:main",
+            "dl-convert=hailo_toolbox.cli.convert:main",
+            "dl-infer=hailo_toolbox.cli.infer:main",
+            "dl-server=hailo_toolbox.cli.server:main",
         ],
     },
     python_requires=">=3.8",

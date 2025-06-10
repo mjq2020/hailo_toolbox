@@ -47,7 +47,7 @@ pip install -r requirements.txt
 ### 基本使用
 
 ```python
-from hailo_tools.sources import create_source
+from hailo_toolbox.sources import create_source
 
 # 自动检测源类型并创建
 source = create_source("path/to/video.mp4")
@@ -63,7 +63,7 @@ with source:
 ### 手动创建特定源类型
 
 ```python
-from hailo_tools.sources import ImageSource, VideoSource, WebcamSource
+from hailo_toolbox.sources import ImageSource, VideoSource, WebcamSource
 
 # 图像源
 image_source = ImageSource("img_src", {
@@ -91,7 +91,7 @@ webcam_source = WebcamSource("cam_src", {
 ### 多源配置
 
 ```python
-from hailo_tools.sources import MultiSourceManager
+from hailo_toolbox.sources import MultiSourceManager
 
 # 配置多个源
 sources_config = [
@@ -207,7 +207,7 @@ config = {
 模块会根据输入自动检测源类型：
 
 ```python
-from hailo_tools.sources import detect_source_type, SourceType
+from hailo_toolbox.sources import detect_source_type, SourceType
 
 # 图像文件
 detect_source_type("image.jpg")          # -> SourceType.IMAGE
@@ -312,7 +312,7 @@ source = create_source("/dev/video0", config={
 添加新的源类型：
 
 ```python
-from hailo_tools.sources.base import BaseSource, SourceType
+from hailo_toolbox.sources.base import BaseSource, SourceType
 
 class CustomSource(BaseSource):
     def __init__(self, source_id: str, config: Optional[Dict[str, Any]] = None):

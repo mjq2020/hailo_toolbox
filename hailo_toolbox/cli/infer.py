@@ -439,7 +439,7 @@ def main() -> int:
     # 设置日志
     log_level = "DEBUG" if args.verbose else "INFO"
     logger = setup_logger(
-        name="hailo_tools.infer", 
+        name="hailo_toolbox.infer", 
         level=log_level,
         log_file=args.log_file,
         log_dir=args.log_dir

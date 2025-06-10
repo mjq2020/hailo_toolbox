@@ -530,7 +530,7 @@ class TestIntegration(unittest.TestCase):
         if os.path.exists(self.temp_image_path):
             os.unlink(self.temp_image_path)
     
-    @patch('hailo_tools.process.adapters.ImagePreprocessor')
+    @patch('hailo_toolbox.process.adapters.ImagePreprocessor')
     def test_simple_pipeline_integration(self, mock_preprocessor_class):
         """Test a simple pipeline integration."""
         # Mock the preprocessor

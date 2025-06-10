@@ -26,7 +26,7 @@
 
 ```python
 import numpy as np
-from hailo_tools.process import ImagePreprocessor, PreprocessConfig
+from hailo_toolbox.process import ImagePreprocessor, PreprocessConfig
 
 # 创建配置
 config = PreprocessConfig(
@@ -53,7 +53,7 @@ print(f"处理后: {processed_image.shape}, {processed_image.dtype}")
 ### 自定义管道
 
 ```python
-from hailo_tools.process import (
+from hailo_toolbox.process import (
     ResizeTransform, NormalizationTransform, 
     PreprocessPipeline
 )
@@ -246,7 +246,7 @@ TOTAL                     200      0.1801       0.0009
 该模块提供了完善的错误处理机制：
 
 ```python
-from hailo_tools.process import PreprocessError, InvalidConfigError
+from hailo_toolbox.process import PreprocessError, InvalidConfigError
 
 try:
     # 无效配置
@@ -269,7 +269,7 @@ except PreprocessError as e:
 ### 自定义变换
 
 ```python
-from hailo_tools.process.transforms import BaseTransform
+from hailo_toolbox.process.transforms import BaseTransform
 
 class CustomTransform(BaseTransform):
     def __init__(self, param1, param2, name=None):
@@ -368,7 +368,7 @@ This module provides comprehensive postprocessing capabilities for YOLOv8 models
 ### Basic Usage
 
 ```python
-from hailo_tools.process import create_postprocessor, PostprocessConfig
+from hailo_toolbox.process import create_postprocessor, PostprocessConfig
 
 # Create configuration
 config = PostprocessConfig(
@@ -554,13 +554,13 @@ Keypoint postprocessor includes anatomical validation:
 Run the comprehensive test suite:
 
 ```bash
-python -m pytest hailo_tools/process/test_postprocessors.py -v
+python -m pytest hailo_toolbox/process/test_postprocessors.py -v
 ```
 
 Run example demonstrations:
 
 ```bash
-python -m hailo_tools.process.example_usage
+python -m hailo_toolbox.process.example_usage
 ```
 
 ## Architecture

@@ -327,7 +327,7 @@ __all__ = [
 
 
 if __name__ == "__main__":
-    from hailo_tools.cli.config import parse_args
+    from hailo_toolbox.cli.config import parse_args
 
     args = parse_args()
     source = create_source(args.source)

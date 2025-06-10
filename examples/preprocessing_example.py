@@ -11,10 +11,10 @@ import numpy as np
 from pathlib import Path
 import sys
 
-# Add the parent directory to the path to import hailo_tools
+# Add the parent directory to the path to import hailo_toolbox
 sys.path.append(str(Path(__file__).parent.parent))
 
-from hailo_tools.process import (
+from hailo_toolbox.process import (
     ImagePreprocessor, PreprocessConfig,
     ResizeTransform, NormalizationTransform, 
     PreprocessPipeline

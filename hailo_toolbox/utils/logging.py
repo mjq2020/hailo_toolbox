@@ -149,4 +149,4 @@ atexit.register(flush_all_loggers)
 
 
 # 创建根记录器
-root_logger = setup_logger("hailo_tools", console=True, log_file="hailo_tools.log") 
+root_logger = setup_logger("hailo_toolbox", console=True, log_file="hailo_toolbox.log") 

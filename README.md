@@ -60,7 +60,7 @@ dl-server --config server_config.yaml
 
 ## 项目结构
 
-- `hailo_tools/`: 主要包含项目的核心代码
+- `hailo_toolbox/`: 主要包含项目的核心代码
   - `converters/`: 模型转换相关的代码
   - `inference/`: 推理引擎相关的代码
   - `sources/`: 视频源相关的代码
@@ -74,7 +74,7 @@ dl-server --config server_config.yaml
 继承 `BaseSource` 类并实现所需的方法：
 
 ```python
-from hailo_tools.sources import BaseSource, SourceType
+from hailo_toolbox.sources import BaseSource, SourceType
 
 class NewSource(BaseSource):
     def __init__(self, source_id, config=None):
@@ -100,7 +100,7 @@ class NewSource(BaseSource):
 创建一个接收 `InferenceResult` 的函数：
 
 ```python
-from hailo_tools.inference import InferenceResult
+from hailo_toolbox.inference import InferenceResult
 
 def custom_callback(result: InferenceResult):
     # 处理推理结果

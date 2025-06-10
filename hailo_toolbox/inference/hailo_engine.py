@@ -18,16 +18,16 @@ from hailo_platform import (
     InferVStreams,
 )
 import numpy as np
-from hailo_tools.utils.logging import get_logger
-from hailo_tools.inference.format import NodeInfo
+from hailo_toolbox.utils.logging import get_logger
+from hailo_toolbox.inference.format import NodeInfo
 from multiprocessing import Queue
 from typing import List, Dict
 from yaml import load, FullLoader
-from hailo_tools.utils.timer import Timer
+from hailo_toolbox.utils.timer import Timer
 import time
 from multiprocessing import shared_memory, Process
-from hailo_tools.utils.sharememory import ShareMemoryManager
-from hailo_tools.process.preprocessor import ImagePreprocessor
+from hailo_toolbox.utils.sharememory import ShareMemoryManager
+from hailo_toolbox.process.preprocessor import ImagePreprocessor
 from threading import Thread
 
 

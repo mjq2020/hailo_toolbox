@@ -1,5 +1,5 @@
 import argparse
-from hailo_tools.__version__ import version
+from hailo_toolbox.__version__ import version
 
 
 def parse_args() -> argparse.Namespace:

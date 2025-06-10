@@ -1,18 +1,18 @@
 from typing import Optional, Union, Dict, Any, AnyStr
 import numpy as np
-from hailo_tools.utils.config import Config
-from hailo_tools.cli.config import parse_args
+from hailo_toolbox.utils.config import Config
+from hailo_toolbox.cli.config import parse_args
 
-from hailo_tools.inference.hailo_engine import HailoInference
-from hailo_tools.inference.onnx_engine import ONNXInference
-from hailo_tools.sources import create_source
+from hailo_toolbox.inference.hailo_engine import HailoInference
+from hailo_toolbox.inference.onnx_engine import ONNXInference
+from hailo_toolbox.sources import create_source
 
-from hailo_tools.process import ImagePreprocessor
-from hailo_tools.process.postprocessor_det import YOLOv8DetPostprocessor
-from hailo_tools.process.postprocessor_seg import YOLOv8SegPostprocessor
-from hailo_tools.process.postprocessor_kp import YOLOv8KpPostprocessor
-from hailo_tools.process.visualization import Visualization
-from hailo_tools.process.callback import BaseCallback, CallbackType
+from hailo_toolbox.process import ImagePreprocessor
+from hailo_toolbox.process.postprocessor_det import YOLOv8DetPostprocessor
+from hailo_toolbox.process.postprocessor_seg import YOLOv8SegPostprocessor
+from hailo_toolbox.process.postprocessor_kp import YOLOv8KpPostprocessor
+from hailo_toolbox.process.visualization import Visualization
+from hailo_toolbox.process.callback import BaseCallback, CallbackType
 
 
 class Inference:
