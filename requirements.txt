@@ -1,0 +1,28 @@
+# Core dependencies for hailo_tools sources module
+opencv-python>=4.5.0
+numpy>=1.19.0
+requests>=2.25.0
+
+# Optional dependencies for specific source types
+# Uncomment as needed based on your hardware and requirements
+
+# For Jetson platforms (MIPI cameras)
+# jetson-utils  # Install via NVIDIA SDK Manager
+
+# For Raspberry Pi cameras
+# picamera2>=0.3.0
+
+# For libcamera support
+# python-libcamera  # Platform specific installation
+
+# For advanced video processing
+# ffmpeg-python>=0.2.0
+
+# For testing
+pytest>=6.0.0
+pytest-cov>=2.10.0
+
+# For development
+black>=21.0.0
+flake8>=3.8.0
+mypy>=0.800
