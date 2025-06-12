@@ -553,14 +553,14 @@ class YOLOv8SegPostprocessor(BasePostprocessor):
             boxes = np.array(nms_result["detection_boxes"]) / np.tile(image_dims, 2)
 
             # Scale to original image size if provided
-            if original_shape is not None:
-                scale_h = original_shape[0] / image_dims[0]
-                scale_w = original_shape[1] / image_dims[1]
-                boxes[:, [0, 2]] *= scale_w
-                boxes[:, [1, 3]] *= scale_h
+            # if original_shape is not None:
+            #     scale_h = original_shape[0] / image_dims[0]
+            #     scale_w = original_shape[1] / image_dims[1]
+            #     boxes[:, [0, 2]] *= scale_w
+            #     boxes[:, [1, 3]] *= scale_h
 
-                if masks is not None:
-                    masks = self._scale_masks(masks, original_shape)
+            #     if masks is not None:
+            #         masks = self._scale_masks(masks, original_shape)
 
             # Create result
             if masks is not None:

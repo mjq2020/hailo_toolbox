@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, AnyStr, Union, Callable, Dict, Type
+from typing import Any, List, Optional, AnyStr, Union, Callable, Dict, Type, Iterable
 from enum import Enum
 
 from hailo_toolbox.inference.hailo_engine import HailoInference
@@ -41,25 +41,31 @@ class CallbackRegistry:
 
     Features:
     - Type-safe registration and retrieval
-    - Support for decorator-style registration
+    - Support for decorator-style registration with single or multiple names
     - Extensible callback types via Enum
     - Automatic fallback to empty callback for missing entries
     - Comprehensive error handling and validation
+    - Support for multiple names mapping to the same callback (shared registration)
 
     Example:
         # Create registry instance
         registry = CallbackRegistry()
 
-        # Register using decorator
+        # Register using decorator with single name
         @registry.register("my_preprocessor", CallbackType.PRE_PROCESSOR)
         def my_preprocess_func(data):
             return processed_data
 
-        # Register directly
-        registry.register_callback("my_postprocessor", CallbackType.POST_PROCESSOR, my_postprocess_func)
+        # Register using decorator with multiple names
+        @registry.register(["yolov8det", "yolov8seg"], CallbackType.PRE_PROCESSOR)
+        def yolo_preprocess_func(data):
+            return processed_data
 
-        # Retrieve registered callback
-        preprocessor = registry.get_callback("my_preprocessor", CallbackType.PRE_PROCESSOR)
+        # Register directly with multiple names
+        registry.register_callback(["name1", "name2"], CallbackType.POST_PROCESSOR, my_postprocess_func)
+
+        # Retrieve registered callback (works with any of the registered names)
+        preprocessor = registry.get_callback("yolov8det", CallbackType.PRE_PROCESSOR)
     """
 
     def __init__(self):
@@ -77,44 +83,55 @@ class CallbackRegistry:
         self.Source: Dict[str, Callable] = {}
         self.CollatInfer: Dict[str, Callable] = {}
 
-    def register(self, name: str, callback_type: CallbackType) -> Callable:
+    def register(
+        self, names: Union[str, List[str]], callback_type: CallbackType
+    ) -> Callable:
         """
-        Decorator for registering callbacks with specified name and type.
+        Decorator for registering callbacks with specified name(s) and type.
 
         Args:
-            name: Unique identifier for the callback
+            names: Single name or list of names to register the callback under
             callback_type: Type of callback from CallbackType enum
 
         Returns:
             Decorator function
 
         Example:
+            # Single name registration
             @registry.register("yolov8_preprocess", CallbackType.PRE_PROCESSOR)
             def preprocess_func(data):
+                return processed_data
+
+            # Multiple names registration
+            @registry.register(["yolov8det", "yolov8seg"], CallbackType.PRE_PROCESSOR)
+            def yolo_preprocess_func(data):
                 return processed_data
         """
 
         def decorator(func: Union[Callable, Type]) -> Union[Callable, Type]:
-            self.register_callback(name, callback_type, func)
+            self.register_callback(names, callback_type, func)
             return func
 
         return decorator
 
     def register_callback(
-        self, name: str, callback_type: CallbackType, callback: Union[Callable, Type]
+        self,
+        names: Union[str, List[str]],
+        callback_type: CallbackType,
+        callback: Union[Callable, Type],
     ) -> None:
         """
-        Register a callback/function/class with the specified name and type.
+        Register a callback/function/class with the specified name(s) and type.
 
         Args:
-            name: Unique identifier for the callback
+            names: Single name or list of names to register the callback under
             callback_type: Type of callback from CallbackType enum
             callback: Function, method, or class to register
 
         Raises:
-            ValueError: If callback_type is not a valid CallbackType
-            TypeError: If callback is not callable or a class
-            KeyError: If name already exists for the given type (overwrites with warning)
+            ValueError: If callback_type is not a valid CallbackType or names is empty
+            TypeError: If callback is not callable or a class, or names is not string/list
+            KeyError: If any name already exists for the given type (overwrites with warning)
         """
         if not isinstance(callback_type, CallbackType):
             raise ValueError(
@@ -126,19 +143,45 @@ class CallbackRegistry:
                 f"Callback must be callable or a class, got {type(callback)}"
             )
 
-        # Check for existing registration
-        if name in self._callbacks[callback_type]:
-            logger.warning(
-                f"Overwriting existing callback '{name}' for type '{callback_type.value}'"
+        # Normalize names to list
+        if isinstance(names, str):
+            names_list = [names]
+        elif isinstance(names, (list, tuple)):
+            names_list = list(names)
+        else:
+            raise TypeError(
+                f"Names must be string or list of strings, got {type(names)}"
             )
 
-        # Register in main storage
-        self._callbacks[callback_type][name] = callback
+        if not names_list:
+            raise ValueError("At least one name must be provided")
 
-        # Maintain legacy compatibility
-        self._update_legacy_storage(name, callback_type, callback)
+        # Validate all names are strings
+        for name in names_list:
+            if not isinstance(name, str):
+                raise TypeError(
+                    f"All names must be strings, got {type(name)} for '{name}'"
+                )
 
-        logger.debug(f"Registered callback '{name}' for type '{callback_type.value}'")
+        # Register callback under all specified names
+        registered_names = []
+        for name in names_list:
+            # Check for existing registration
+            if name in self._callbacks[callback_type]:
+                logger.warning(
+                    f"Overwriting existing callback '{name}' for type '{callback_type.value}'"
+                )
+
+            # Register in main storage
+            self._callbacks[callback_type][name] = callback
+            registered_names.append(name)
+
+            # Maintain legacy compatibility
+            self._update_legacy_storage(name, callback_type, callback)
+
+        logger.debug(
+            f"Registered callback under names {registered_names} for type '{callback_type.value}'"
+        )
 
     def _update_legacy_storage(
         self, name: str, callback_type: CallbackType, callback: Union[Callable, Type]
@@ -207,51 +250,97 @@ class CallbackRegistry:
             for cb_type, callbacks in self._callbacks.items()
         }
 
-    def unregister_callback(self, name: str, callback_type: CallbackType) -> bool:
+    def get_shared_names(self, name: str, callback_type: CallbackType) -> List[str]:
         """
-        Unregister a callback by name and type.
+        Get all names that point to the same callback as the given name.
 
         Args:
-            name: Name of the callback to unregister
+            name: Name of the callback to find shared names for
             callback_type: Type of the callback
 
         Returns:
-            True if callback was found and removed, False otherwise
+            List of all names (including the input name) that share the same callback
+
+        Raises:
+            ValueError: If callback_type is not valid or name is not registered
         """
         if not isinstance(callback_type, CallbackType):
             raise ValueError(
                 f"Invalid callback type: {callback_type}. Must be a CallbackType enum."
             )
 
-        if name in self._callbacks[callback_type]:
-            del self._callbacks[callback_type][name]
-
-            # Clean up legacy storage
-            if (
-                callback_type == CallbackType.PRE_PROCESSOR
-                and name in self.PreProcessor
-            ):
-                del self.PreProcessor[name]
-            elif (
-                callback_type == CallbackType.POST_PROCESSOR
-                and name in self.PostProcessor
-            ):
-                del self.PostProcessor[name]
-            elif callback_type == CallbackType.VISUALIZER and name in self.Visualizer:
-                del self.Visualizer[name]
-            elif callback_type == CallbackType.SOURCE and name in self.Source:
-                del self.Source[name]
-            elif (
-                callback_type == CallbackType.COLLAT_INFER and name in self.CollatInfer
-            ):
-                del self.CollatInfer[name]
-
-            logger.debug(
-                f"Unregistered callback '{name}' for type '{callback_type.value}'"
+        if name not in self._callbacks[callback_type]:
+            raise ValueError(
+                f"Callback '{name}' not found for type '{callback_type.value}'"
             )
-            return True
 
-        return False
+        target_callback = self._callbacks[callback_type][name]
+        shared_names = []
+
+        for registered_name, callback in self._callbacks[callback_type].items():
+            if callback is target_callback:
+                shared_names.append(registered_name)
+
+        return shared_names
+
+    def unregister_callback(
+        self, names: Union[str, List[str]], callback_type: CallbackType
+    ) -> bool:
+        """
+        Unregister callback(s) by name(s) and type.
+
+        Args:
+            names: Single name or list of names of callbacks to unregister
+            callback_type: Type of the callback
+
+        Returns:
+            True if at least one callback was found and removed, False otherwise
+        """
+        if not isinstance(callback_type, CallbackType):
+            raise ValueError(
+                f"Invalid callback type: {callback_type}. Must be a CallbackType enum."
+            )
+
+        # Normalize names to list
+        if isinstance(names, str):
+            names_list = [names]
+        else:
+            names_list = list(names)
+
+        removed_count = 0
+        for name in names_list:
+            if name in self._callbacks[callback_type]:
+                del self._callbacks[callback_type][name]
+                removed_count += 1
+
+                # Clean up legacy storage
+                if (
+                    callback_type == CallbackType.PRE_PROCESSOR
+                    and name in self.PreProcessor
+                ):
+                    del self.PreProcessor[name]
+                elif (
+                    callback_type == CallbackType.POST_PROCESSOR
+                    and name in self.PostProcessor
+                ):
+                    del self.PostProcessor[name]
+                elif (
+                    callback_type == CallbackType.VISUALIZER and name in self.Visualizer
+                ):
+                    del self.Visualizer[name]
+                elif callback_type == CallbackType.SOURCE and name in self.Source:
+                    del self.Source[name]
+                elif (
+                    callback_type == CallbackType.COLLAT_INFER
+                    and name in self.CollatInfer
+                ):
+                    del self.CollatInfer[name]
+
+                logger.debug(
+                    f"Unregistered callback '{name}' for type '{callback_type.value}'"
+                )
+
+        return removed_count > 0
 
     def has_callback(self, name: str, callback_type: CallbackType) -> bool:
         """
@@ -268,93 +357,135 @@ class CallbackRegistry:
             return False
         return name in self._callbacks[callback_type]
 
-    # Convenient type-specific decorator methods
-    def registryPreProcessor(self, name: str) -> Callable:
+    # Convenient type-specific decorator methods with multi-name support
+    def registryPreProcessor(self, *names: str) -> Callable:
         """
-        Convenient decorator for registering pre-processors.
+        Convenient decorator for registering pre-processors with multiple names.
 
         Args:
-            name: Unique identifier for the pre-processor
+            *names: One or more unique identifiers for the pre-processor
 
         Returns:
             Decorator function
 
         Example:
+            # Single name
             @CALLBACK_REGISTRY.registryPreProcessor("yolo_preprocess")
             def preprocess_func(image):
                 return processed_image
-        """
-        return self.register(name, CallbackType.PRE_PROCESSOR)
 
-    def registryPostProcessor(self, name: str) -> Callable:
+            # Multiple names
+            @CALLBACK_REGISTRY.registryPreProcessor("yolov8det", "yolov8seg")
+            def yolo_preprocess_func(image):
+                return processed_image
         """
-        Convenient decorator for registering post-processors.
+        if not names:
+            raise ValueError("At least one name must be provided")
+        return self.register(list(names), CallbackType.PRE_PROCESSOR)
+
+    def registryPostProcessor(self, *names: str) -> Callable:
+        """
+        Convenient decorator for registering post-processors with multiple names.
 
         Args:
-            name: Unique identifier for the post-processor
+            *names: One or more unique identifiers for the post-processor
 
         Returns:
             Decorator function
 
         Example:
+            # Single name
             @CALLBACK_REGISTRY.registryPostProcessor("yolo_postprocess")
             def postprocess_func(predictions):
                 return detections
-        """
-        return self.register(name, CallbackType.POST_PROCESSOR)
 
-    def registryVisualizer(self, name: str) -> Callable:
+            # Multiple names
+            @CALLBACK_REGISTRY.registryPostProcessor("yolov8det", "yolov8seg")
+            def yolo_postprocess_func(predictions):
+                return detections
         """
-        Convenient decorator for registering visualizers.
+        if not names:
+            raise ValueError("At least one name must be provided")
+        return self.register(list(names), CallbackType.POST_PROCESSOR)
+
+    def registryVisualizer(self, *names: str) -> Callable:
+        """
+        Convenient decorator for registering visualizers with multiple names.
 
         Args:
-            name: Unique identifier for the visualizer
+            *names: One or more unique identifiers for the visualizer
 
         Returns:
             Decorator function
 
         Example:
+            # Single name
             @CALLBACK_REGISTRY.registryVisualizer("bbox_visualizer")
             class BBoxVisualizer:
                 def __init__(self, config):
                     pass
-        """
-        return self.register(name, CallbackType.VISUALIZER)
 
-    def registrySource(self, name: str) -> Callable:
+            # Multiple names
+            @CALLBACK_REGISTRY.registryVisualizer("yolov8det", "yolov8seg")
+            class YoloVisualizer:
+                def __init__(self, config):
+                    pass
         """
-        Convenient decorator for registering data sources.
+        if not names:
+            raise ValueError("At least one name must be provided")
+        return self.register(list(names), CallbackType.VISUALIZER)
+
+    def registrySource(self, *names: str) -> Callable:
+        """
+        Convenient decorator for registering data sources with multiple names.
 
         Args:
-            name: Unique identifier for the data source
+            *names: One or more unique identifiers for the data source
 
         Returns:
             Decorator function
 
         Example:
+            # Single name
             @CALLBACK_REGISTRY.registrySource("video_source")
             class VideoSource:
                 def __init__(self, path):
                     pass
-        """
-        return self.register(name, CallbackType.SOURCE)
 
-    def registryCollatInfer(self, name: str) -> Callable:
+            # Multiple names
+            @CALLBACK_REGISTRY.registrySource("video", "webcam")
+            class VideoSource:
+                def __init__(self, path):
+                    pass
         """
-        Convenient decorator for registering collaborative inference components.
+        if not names:
+            raise ValueError("At least one name must be provided")
+        return self.register(list(names), CallbackType.SOURCE)
+
+    def registryCollatInfer(self, *names: str) -> Callable:
+        """
+        Convenient decorator for registering collaborative inference components with multiple names.
 
         Args:
-            name: Unique identifier for the collaborative inference component
+            *names: One or more unique identifiers for the collaborative inference component
 
         Returns:
             Decorator function
 
         Example:
+            # Single name
             @CALLBACK_REGISTRY.registryCollatInfer("yolov8det")
             def collat_infer_func(data):
                 return results
+
+            # Multiple names
+            @CALLBACK_REGISTRY.registryCollatInfer("yolov8det", "yolov8seg")
+            def yolo_collat_infer_func(data):
+                return results
         """
-        return self.register(name, CallbackType.COLLAT_INFER)
+        if not names:
+            raise ValueError("At least one name must be provided")
+        return self.register(list(names), CallbackType.COLLAT_INFER)
 
     # Legacy methods for backward compatibility
     def getPreProcessor(self, name: str) -> Callable:
@@ -383,9 +514,46 @@ CALLBACK_REGISTRY = CallbackRegistry()
 
 
 class InferenceEngine:
+    """
+    Core inference engine that orchestrates the entire inference pipeline.
+
+    The InferenceEngine manages the complete lifecycle of model inference including:
+    - Model initialization (Hailo or ONNX)
+    - Data source management
+    - Preprocessing pipeline
+    - Inference execution
+    - Postprocessing pipeline
+    - Visualization and output handling
+
+    Features:
+    - Support for multiple inference backends (Hailo, ONNX)
+    - Flexible callback system for customization
+    - Configurable preprocessing and postprocessing
+    - Built-in visualization capabilities
+    - Frame-by-frame processing with debugging support
+
+    Args:
+        config: Configuration object containing all pipeline settings
+        callback_name: Name identifier for callback registration lookup
+
+    Example:
+        config = Config(model="model.hef", source="video.mp4", task_type="detection")
+        engine = InferenceEngine(config, "yolov8det")
+        engine.run()
+    """
+
     def __init__(self, config: Config, callback_name: AnyStr) -> None:
+        """
+        Initialize the inference engine with configuration and callback settings.
+
+        Args:
+            config: Configuration object with model, source, and processing settings
+            callback_name: Identifier for callback lookup in the registry
+        """
         self.callback_name = callback_name
         self.config = config
+
+        # Determine inference mode and backend type
         if self.config.command == "infer":
             self.infer = True
             if self.config.model.endswith(".hef"):
@@ -396,12 +564,15 @@ class InferenceEngine:
                 raise ValueError(f"Unsupported model type: {self.config.model}")
         else:
             self.infer = False
-        self.task_type = self.config.task_type
 
+        self.task_type = self.config.task_type
         self.callback_registry = CALLBACK_REGISTRY
+
+        # Initialize all pipeline components
         self.init_all()
 
     def init_all(self):
+        """Initialize all pipeline components in the correct order"""
         self.init_model()
         self.init_source()
         self.init_preprocess()
@@ -410,42 +581,100 @@ class InferenceEngine:
         self.init_callback()
 
     def init_model(self, model_file: Optional[Any] = None):
+        """
+        Initialize the inference model based on the backend type.
+
+        Args:
+            model_file: Optional override for model file path
+        """
         if self.infer_type == "hailo":
             self.infer = HailoInference(self.config.model)
         elif self.infer_type == "onnx":
             self.infer = ONNXInference(self.config.model)
 
     def init_source(self, source: Optional[Any] = None):
+        """
+        Initialize the data source component.
+
+        Args:
+            source: Optional override for source configuration
+        """
         self.source = self.callback_registry.getSource(self.callback_name)(
             self.config.source
         )
 
     def init_preprocess(self, preprocess: Optional[Any] = None):
+        """
+        Initialize the preprocessing component.
+
+        Args:
+            preprocess: Optional override for preprocessing configuration
+        """
         self.preprocess = self.callback_registry.getPreProcessor(self.callback_name)(
             self.config.preprocess
         )
 
     def init_postprocess(self, postprocess: Optional[Any] = None):
+        """
+        Initialize the postprocessing component.
+
+        Args:
+            postprocess: Optional override for postprocessing configuration
+        """
+        print(
+            f"postprocess: {self.callback_name},{self.callback_registry.getPostProcessor(self.callback_name).__name__}"
+        )
         self.postprocess = self.callback_registry.getPostProcessor(self.callback_name)(
             self.config.postprocess
         )
 
     def init_visualization(self, visualization: Optional[Any] = None):
-        # Create visualization config based on task type
+        """
+        Initialize the visualization component based on task type.
+
+        Args:
+            visualization: Optional override for visualization configuration
+        """
         self.visualization = self.callback_registry.getVisualizer(self.callback_name)(
             self.config.visualization
         )
 
     def init_callback(self, callback: Optional[Any] = None):
+        """
+        Initialize the collaborative inference callback.
+
+        Args:
+            callback: Optional override for callback configuration
+        """
         self.callback = self.infer.add_callback(
             self.callback_registry.getCollatInfer(self.callback_name)
         )
 
     @classmethod
     def load_from_config(cls, config):
+        """
+        Factory method to create InferenceEngine from configuration dictionary.
+
+        Args:
+            config: Dictionary containing configuration parameters
+
+        Returns:
+            InferenceEngine instance initialized with the provided configuration
+        """
         return cls(**config)
 
     def run(self):
+        """
+        Execute the complete inference pipeline.
+
+        Processes frames from the source through the entire pipeline:
+        1. Frame acquisition from source
+        2. Preprocessing
+        3. Model inference
+        4. Postprocessing
+        5. Visualization (if enabled)
+        6. Output saving (if configured)
+        """
         with self.source as source:
             for frame_idx, frame in enumerate(source):
                 logger.debug(f"Processing frame {frame_idx}, shape: {frame.shape}")
@@ -465,11 +694,11 @@ class InferenceEngine:
                     results, original_shape=original_frame.shape[:2]
                 )
 
-                # Visualize results
+                # Visualize results if enabled
                 if self.config.show:
                     vis_image = self.visualization(original_frame, post_results)
 
-                    # Save or display the visualization
+                    # Save visualization if configured
                     if self.config.save:
                         if self.config.save_path is None:
                             output_path = "output"
@@ -482,12 +711,37 @@ class InferenceEngine:
                         success = self.visualization.save(vis_image, output_path)
                         if success:
                             logger.debug(f"Saved visualization to {output_path}")
+
+                    # Display visualization
                     self.visualization.show(vis_image, f"show")
 
     def _call_callback(self, callback_type: CallbackType, frame: np.ndarray):
+        """
+        Internal method to call registered callbacks.
+
+        Args:
+            callback_type: Type of callback to invoke
+            frame: Frame data to pass to the callback
+        """
         if callback_type in self.callback_registry:
             self.callback_registry[callback_type](frame)
 
 
 if __name__ == "__main__":
-    print(CALLBACK_REGISTRY.getPreProcessor("yolov8det"))
+    # Demonstrate the enhanced registry functionality
+    print("Testing callback registry with multiple names:")
+
+    # Test getting callback by different names
+    print(f"yolov8det preprocessor: {CALLBACK_REGISTRY.getPreProcessor('yolov8det')}")
+    print(f"yolov8seg preprocessor: {CALLBACK_REGISTRY.getPreProcessor('yolov8seg')}")
+
+    # Test that both names point to the same function
+    callback1 = CALLBACK_REGISTRY.getPreProcessor("yolov8det")
+    callback2 = CALLBACK_REGISTRY.getPostProcessor("yolov8seg")
+    print(f"Same callback object: {callback1 is callback2}")
+
+    # List all shared names
+    shared_names = CALLBACK_REGISTRY.get_shared_names(
+        "yolov8det", CallbackType.PRE_PROCESSOR
+    )
+    print(f"Shared names for yolov8det: {shared_names}")

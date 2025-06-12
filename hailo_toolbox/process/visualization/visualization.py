@@ -600,7 +600,7 @@ class BaseVisualization(ABC):
         return grid_image
 
 
-@CALLBACK_REGISTRY.registryVisualizer("yolov8det")
+@CALLBACK_REGISTRY.registryVisualizer("yolov8det", "yolo11det")
 class DetectionVisualization(BaseVisualization):
     """
     Specialized visualization class for object detection results.
@@ -738,7 +738,7 @@ class DetectionVisualization(BaseVisualization):
         return image
 
 
-@CALLBACK_REGISTRY.registryVisualizer("yolov8seg")
+@CALLBACK_REGISTRY.registryVisualizer("yolov8seg", "yolov5seg")
 class SegmentationVisualization(BaseVisualization):
     """
     Specialized visualization class for instance segmentation results.
@@ -922,8 +922,8 @@ class SegmentationVisualization(BaseVisualization):
             for i, box in enumerate(boxes):
                 # Scale to image dimensions (assuming normalized coordinates)
                 # box = box * image.shape[1]  # TODO: Make this configurable
-                box[::2] *= 640
-                box[1::2] *= 640
+                box[::2] *= image.shape[1]
+                box[1::2] *= image.shape[0]
                 x1, y1, x2, y2 = box.astype(int)
 
                 # Ensure coordinates are within image bounds

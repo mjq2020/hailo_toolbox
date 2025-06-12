@@ -95,11 +95,25 @@ def is_media_folder(source: Union[str, int, Dict[str, Any], Path]) -> bool:
     # Check if folder contains any media files (images or videos)
     media_extensions = [
         # Image formats
-        ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".gif",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".bmp",
+        ".tiff",
+        ".tif",
+        ".webp",
+        ".gif",
         # Video formats
-        ".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".mkv",
+        ".webm",
+        ".flv",
+        ".wmv",
+        ".m4v",
     ]
-    
+
     for ext in media_extensions:
         if list(path.glob(f"*{ext}")) or list(path.glob(f"*{ext.upper()}")):
             return True
@@ -260,7 +274,16 @@ def detect_source_type(
         if is_image_folder(source):
             # Check if it contains videos too
             path = Path(source)
-            video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"]
+            video_extensions = [
+                ".mp4",
+                ".avi",
+                ".mov",
+                ".mkv",
+                ".webm",
+                ".flv",
+                ".wmv",
+                ".m4v",
+            ]
             has_videos = any(
                 list(path.glob(f"*{ext}")) or list(path.glob(f"*{ext.upper()}"))
                 for ext in video_extensions

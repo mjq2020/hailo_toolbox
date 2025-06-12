@@ -21,7 +21,7 @@ from hailo_toolbox.inference.core import CALLBACK_REGISTRY
 logger = logging.getLogger(__name__)
 
 
-@CALLBACK_REGISTRY.registryPostProcessor("yolov8det")
+@CALLBACK_REGISTRY.registryPostProcessor("yolov8det", "yolo11det")
 class YOLOv8DetPostprocessor(BasePostprocessor):
     """
     Postprocessor for YOLOv8 object detection models.
