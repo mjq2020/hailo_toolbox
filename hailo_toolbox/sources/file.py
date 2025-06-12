@@ -290,7 +290,7 @@ class VideoSource(BaseSource):
                 - timeout: Timeout for network streams in seconds (default: 10).
         """
         super().__init__(source_id, config)
-        self.source_type = SourceType.FILE
+        self.source_type = SourceType.FOLDER
 
         # File specific configs
         self.file_path = self.config.get("file_path")
@@ -482,6 +482,400 @@ class VideoSource(BaseSource):
             self.current_frame_idx = frame_idx
 
         return success
+
+
+class FolderSource(BaseSource):
+    """
+    Mixed media folder source that reads from a folder containing both images and videos.
+
+    Automatically detects and processes both image files and video files in a folder,
+    providing a unified interface to iterate through all media content sequentially.
+    """
+
+    def __init__(self, source_id: str, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize a folder-based media source.
+
+        Args:
+            source_id: Unique identifier for this source.
+            config: Configuration dictionary containing:
+                - folder_path: Path to the folder containing media files.
+                - image_formats: List of supported image formats (default: common formats).
+                - video_formats: List of supported video formats (default: common formats).
+                - loop: Whether to loop through all media files (default: True).
+                - sort_files: Whether to sort files alphabetically (default: True).
+                - video_frame_step: Number of frames to skip for videos (default: 1, no skip).
+                - image_display_duration: How many times to repeat each image (default: 1).
+                - recursive: Whether to scan subfolders recursively (default: False).
+        """
+        super().__init__(source_id, config)
+        self.source_type = SourceType.FILE
+
+        # Folder specific configs
+        self.folder_path = self.config.get("folder_path")
+        if not self.folder_path:
+            raise ValueError("folder_path must be provided for FolderSource")
+
+        self.image_formats = self.config.get(
+            "image_formats",
+            [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".gif"],
+        )
+        self.video_formats = self.config.get(
+            "video_formats",
+            [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"],
+        )
+        self.loop = self.config.get("loop", True)
+        self.sort_files = self.config.get("sort_files", True)
+        self.video_frame_step = self.config.get("video_frame_step", 1)
+        self.image_display_duration = self.config.get("image_display_duration", 1)
+        self.recursive = self.config.get("recursive", False)
+
+        # Internal state
+        self.media_files = []  # List of tuples: (file_path, file_type)
+        self.current_file_index = 0
+        self.current_video_cap = None
+        self.current_video_frame_count = 0
+        self.current_image_repeat_count = 0
+        self.current_media_info = None
+
+    def _get_file_type(self, file_path: str) -> Optional[str]:
+        """
+        Determine the type of media file.
+
+        Args:
+            file_path: Path to the media file.
+
+        Returns:
+            'image', 'video', or None if unsupported.
+        """
+        file_ext = Path(file_path).suffix.lower()
+
+        if file_ext in self.image_formats:
+            return "image"
+        elif file_ext in self.video_formats:
+            return "video"
+        else:
+            return None
+
+    def _scan_folder(self, folder_path: str) -> List[Tuple[str, str]]:
+        """
+        Scan folder for media files (images and videos).
+
+        Args:
+            folder_path: Path to folder.
+
+        Returns:
+            List of tuples containing (file_path, file_type).
+        """
+        media_files = []
+        folder_path = Path(folder_path)
+
+        # Determine scan pattern based on recursive setting
+        if self.recursive:
+            scan_pattern = "**/*"
+        else:
+            scan_pattern = "*"
+
+        # Scan all files
+        for file_path in folder_path.glob(scan_pattern):
+            if file_path.is_file():
+                file_type = self._get_file_type(str(file_path))
+                if file_type:
+                    media_files.append((str(file_path), file_type))
+
+        # Sort files if requested
+        if self.sort_files:
+            media_files.sort(key=lambda x: x[0])
+
+        return media_files
+
+    def _load_image(self, file_path: str) -> Optional[np.ndarray]:
+        """
+        Load image from file.
+
+        Args:
+            file_path: Path to image file.
+
+        Returns:
+            Image as numpy array or None if failed.
+        """
+        try:
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Image file not found: {file_path}")
+
+            image = cv2.imread(file_path, cv2.IMREAD_COLOR)
+            if image is None:
+                raise ValueError(f"Failed to load image: {file_path}")
+
+            # Resize if needed
+            if (
+                image.shape[1] != self.resolution[0]
+                or image.shape[0] != self.resolution[1]
+            ):
+                image = cv2.resize(image, self.resolution)
+
+            return image
+
+        except Exception as e:
+            print(f"Error loading image from file {file_path}: {e}")
+            return None
+
+    def _open_video(self, file_path: str) -> bool:
+        """
+        Open a video file for reading.
+
+        Args:
+            file_path: Path to video file.
+
+        Returns:
+            True if opened successfully, False otherwise.
+        """
+        try:
+            if self.current_video_cap is not None:
+                self.current_video_cap.release()
+
+            self.current_video_cap = cv2.VideoCapture(file_path)
+            if not self.current_video_cap.isOpened():
+                raise RuntimeError(f"Failed to open video file: {file_path}")
+
+            self.current_video_frame_count = 0
+            return True
+
+        except Exception as e:
+            print(f"Error opening video file {file_path}: {e}")
+            if self.current_video_cap is not None:
+                self.current_video_cap.release()
+                self.current_video_cap = None
+            return False
+
+    def _read_video_frame(self) -> Optional[np.ndarray]:
+        """
+        Read next frame from current video.
+
+        Returns:
+            Frame as numpy array or None if failed/end of video.
+        """
+        if self.current_video_cap is None:
+            return None
+
+        # Skip frames if frame step > 1
+        for _ in range(self.video_frame_step):
+            ret, frame = self.current_video_cap.read()
+            if not ret:
+                return None
+            self.current_video_frame_count += 1
+
+        # Resize frame if needed
+        if frame.shape[1] != self.resolution[0] or frame.shape[0] != self.resolution[1]:
+            frame = cv2.resize(frame, self.resolution)
+
+        return frame
+
+    def open(self) -> bool:
+        """
+        Open the folder source and scan for media files.
+
+        Returns:
+            True if source opened successfully, False otherwise.
+        """
+        try:
+            folder_path = Path(self.folder_path)
+
+            if not folder_path.exists():
+                raise FileNotFoundError(f"Folder not found: {self.folder_path}")
+
+            if not folder_path.is_dir():
+                raise ValueError(f"Path is not a folder: {self.folder_path}")
+
+            # Scan folder for media files
+            self.media_files = self._scan_folder(str(folder_path))
+
+            if not self.media_files:
+                raise ValueError(
+                    f"No supported media files found in folder: {self.folder_path}"
+                )
+
+            # Reset state
+            self.current_file_index = 0
+            self.current_video_cap = None
+            self.current_video_frame_count = 0
+            self.current_image_repeat_count = 0
+            self.current_media_info = None
+
+            self.is_opened = True
+            return True
+
+        except Exception as e:
+            print(f"Error opening folder source {self.source_id}: {e}")
+            self.is_opened = False
+            return False
+
+    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+        """
+        Read the next frame/image from the folder.
+
+        Returns:
+            Tuple of (success, frame/image).
+        """
+        if not self.is_opened or not self.media_files:
+            return False, None
+
+        # Check if we've reached the end of all files
+        if self.current_file_index >= len(self.media_files):
+            if self.loop:
+                # Reset to beginning
+                self.current_file_index = 0
+                self.current_image_repeat_count = 0
+                if self.current_video_cap is not None:
+                    self.current_video_cap.release()
+                    self.current_video_cap = None
+            else:
+                return False, None
+
+        # Get current file info
+        current_file_path, current_file_type = self.media_files[self.current_file_index]
+
+        if current_file_type == "image":
+            # Handle image files
+            if self.current_image_repeat_count < self.image_display_duration:
+                # Load and return image
+                image = self._load_image(current_file_path)
+                if image is None:
+                    # Skip this file and try next
+                    self.current_file_index += 1
+                    self.current_image_repeat_count = 0
+                    return self.read()
+
+                self.current_image_repeat_count += 1
+                self.current_media_info = {
+                    "file_path": current_file_path,
+                    "file_type": "image",
+                    "repeat_count": self.current_image_repeat_count,
+                }
+                return True, image
+            else:
+                # Move to next file
+                self.current_file_index += 1
+                self.current_image_repeat_count = 0
+                return self.read()
+
+        elif current_file_type == "video":
+            # Handle video files
+            if self.current_video_cap is None:
+                # Open new video file
+                if not self._open_video(current_file_path):
+                    # Skip this file and try next
+                    self.current_file_index += 1
+                    return self.read()
+
+            # Try to read next frame
+            frame = self._read_video_frame()
+
+            if frame is None:
+                # End of video, move to next file
+                self.current_video_cap.release()
+                self.current_video_cap = None
+                self.current_file_index += 1
+                return self.read()
+
+            self.current_media_info = {
+                "file_path": current_file_path,
+                "file_type": "video",
+                "frame_count": self.current_video_frame_count,
+            }
+            return True, frame
+
+        else:
+            # Unsupported file type, skip
+            self.current_file_index += 1
+            return self.read()
+
+    def close(self) -> None:
+        """Close the folder source and release resources."""
+        if self.current_video_cap is not None:
+            self.current_video_cap.release()
+            self.current_video_cap = None
+
+        self.current_media_info = None
+        self.is_opened = False
+
+    def get_info(self) -> Dict[str, Any]:
+        """
+        Get information about the folder source.
+
+        Returns:
+            Dictionary with information about the folder source.
+        """
+        info = super().get_info()
+        info.update(
+            {
+                "folder_path": self.folder_path,
+                "total_media_files": len(self.media_files),
+                "current_file_index": self.current_file_index,
+                "image_formats": self.image_formats,
+                "video_formats": self.video_formats,
+                "loop": self.loop,
+                "recursive": self.recursive,
+                "video_frame_step": self.video_frame_step,
+                "image_display_duration": self.image_display_duration,
+                "current_media_info": self.current_media_info,
+                "media_files_summary": {
+                    "images": sum(
+                        1 for _, file_type in self.media_files if file_type == "image"
+                    ),
+                    "videos": sum(
+                        1 for _, file_type in self.media_files if file_type == "video"
+                    ),
+                },
+            }
+        )
+        return info
+
+    def seek(self, file_index: int) -> bool:
+        """
+        Seek to a specific media file index.
+
+        Args:
+            file_index: Media file index to seek to.
+
+        Returns:
+            True if seek was successful, False otherwise.
+        """
+        if not self.is_opened:
+            return False
+
+        if 0 <= file_index < len(self.media_files):
+            # Close current video if open
+            if self.current_video_cap is not None:
+                self.current_video_cap.release()
+                self.current_video_cap = None
+
+            # Update position
+            self.current_file_index = file_index
+            self.current_image_repeat_count = 0
+            self.current_video_frame_count = 0
+            return True
+
+        return False
+
+    def get_current_file_info(self) -> Optional[Dict[str, Any]]:
+        """
+        Get information about the currently processed file.
+
+        Returns:
+            Dictionary with current file information or None.
+        """
+        if not self.is_opened or self.current_file_index >= len(self.media_files):
+            return None
+
+        current_file_path, current_file_type = self.media_files[self.current_file_index]
+        return {
+            "file_path": current_file_path,
+            "file_name": os.path.basename(current_file_path),
+            "file_type": current_file_type,
+            "file_index": self.current_file_index,
+            "total_files": len(self.media_files),
+        }
 
 
 # Backward compatibility

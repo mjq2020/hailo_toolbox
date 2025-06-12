@@ -18,6 +18,7 @@ class SourceType(Enum):
     MULTI = auto()
     CUSTOM = auto()
     IMAGE = auto()
+    FOLDER = auto()
 
 
 class BaseSource(ABC):

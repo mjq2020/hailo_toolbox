@@ -74,6 +74,7 @@ def parse_args() -> argparse.Namespace:
         "--callback",
         "-c",
         type=str,
+        required=True,
         help="Callback name",
     )
 
@@ -81,6 +82,7 @@ def parse_args() -> argparse.Namespace:
         "--source",
         "-s",
         type=str,
+        required=True,
         help="Path to the source file (video, image, or camera)",
     )
     infer_parser.add_argument(

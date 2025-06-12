@@ -8,7 +8,7 @@ from typing import Any, Dict, Union, List
 from pathlib import Path
 from urllib.parse import urlparse
 from .base import BaseSource, SourceType
-from .file import ImageSource, VideoSource, FileSource
+from .file import ImageSource, VideoSource, FileSource, FolderSource
 from .webcam import WebcamSource
 from .ip_camera import IPCameraSource
 from .mipi import MIPICameraSource
@@ -76,6 +76,31 @@ def is_image_folder(source: Union[str, int, Dict[str, Any], Path]) -> bool:
         ".gif",
     ]
     for ext in image_extensions:
+        if list(path.glob(f"*{ext}")) or list(path.glob(f"*{ext.upper()}")):
+            return True
+    return False
+
+
+def is_media_folder(source: Union[str, int, Dict[str, Any], Path]) -> bool:
+    """
+    Check if the source is a folder containing mixed media files (images and videos).
+    """
+    if not isinstance(source, (str, Path)):
+        return False
+
+    path = Path(source)
+    if not path.exists() or not path.is_dir():
+        return False
+
+    # Check if folder contains any media files (images or videos)
+    media_extensions = [
+        # Image formats
+        ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".gif",
+        # Video formats
+        ".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"
+    ]
+    
+    for ext in media_extensions:
         if list(path.glob(f"*{ext}")) or list(path.glob(f"*{ext.upper()}")):
             return True
     return False
@@ -230,7 +255,23 @@ def detect_source_type(
             return SourceType.FILE
 
     # Local file/folder checks
-    if is_image_file(source) or is_image_folder(source):
+    if is_media_folder(source):
+        # Check if it's a mixed media folder or just images
+        if is_image_folder(source):
+            # Check if it contains videos too
+            path = Path(source)
+            video_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"]
+            has_videos = any(
+                list(path.glob(f"*{ext}")) or list(path.glob(f"*{ext.upper()}"))
+                for ext in video_extensions
+            )
+            if has_videos:
+                return SourceType.FOLDER  # Mixed media folder
+            else:
+                return SourceType.IMAGE  # Images only folder
+        else:
+            return SourceType.FOLDER  # Mixed media folder
+    elif is_image_file(source):
         return SourceType.IMAGE
     elif is_video_file(source):
         return SourceType.FILE
@@ -308,6 +349,11 @@ def create_source(
                 config["custom_pipeline"] = source
         return MIPICameraSource(source_id, config)
 
+    elif source_type == SourceType.FOLDER:
+        # Set folder_path in config
+        config["folder_path"] = source
+        return FolderSource(source_id, config)
+
     elif source_type == SourceType.MULTI:
         # Handle multi-source configuration
         if isinstance(source, list):
@@ -342,6 +388,7 @@ __all__ = [
     "ImageSource",
     "VideoSource",
     "FileSource",  # Backward compatibility
+    "FolderSource",
     "WebcamSource",
     "IPCameraSource",
     "MIPICameraSource",
@@ -350,6 +397,7 @@ __all__ = [
     "detect_source_type",
     "is_image_file",
     "is_image_folder",
+    "is_media_folder",
     "is_image_url",
     "is_video_file",
     "is_video_url",
