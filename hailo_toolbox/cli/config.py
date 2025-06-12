@@ -84,13 +84,6 @@ def parse_args() -> argparse.Namespace:
         help="Path to the source file (video, image, or camera)",
     )
     infer_parser.add_argument(
-        "--task-type",
-        "--task_type",
-        "-tt",
-        type=str,
-        help="Type of the task (detection, segmentation, or keypoint)",
-    )
-    infer_parser.add_argument(
         "--save",
         "-sv",
         action="store_true",

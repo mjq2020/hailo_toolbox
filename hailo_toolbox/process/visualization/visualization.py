@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 import logging
 import colorsys
 import random
+import time
 import gc  # Import garbage collector for memory management
 from abc import ABC, abstractmethod
 
@@ -327,6 +328,7 @@ class BaseVisualization(ABC):
         ]
 
         logger.info(f"Initialized {self.__class__.__name__} visualization system")
+        self.prev_time = time.time()
 
     def __call__(
         self,
@@ -397,6 +399,23 @@ class BaseVisualization(ABC):
             return self.config.colors[instance_id % len(self.config.colors)]
         else:  # class-based coloring
             return self.config.colors[class_id % len(self.config.colors)]
+
+    def _draw_fps(self, image: np.ndarray, fps: float):
+        """
+        Draw FPS on the image.
+        """
+        font_scale = 0.8
+        cv2.putText(
+            image,
+            f"FPS: {fps:.2f}",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (0, 0, 255),
+            2,
+        )
+        self.prev_time = time.time()
+        return image
 
     def _get_class_name(self, class_id: int) -> str:
         """
@@ -520,6 +539,7 @@ class BaseVisualization(ABC):
             window_name: Window name
             wait_key: Whether to wait for key press
         """
+        self._draw_fps(image, 1 / (time.time() - self.prev_time))
         try:
             cv2.imshow(window_name, image)
             cv2.waitKey(1)
