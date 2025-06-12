@@ -905,7 +905,6 @@ class SegmentationVisualization(BaseVisualization):
             for i, box in enumerate(boxes):
                 # Scale to image dimensions (assuming normalized coordinates)
                 # box = box * image.shape[1]  # TODO: Make this configurable
-                print(box)
                 box[::2] *= 640
                 box[1::2] *= 640
                 x1, y1, x2, y2 = box.astype(int)
@@ -1140,8 +1139,6 @@ class KeypointVisualization(BaseVisualization):
                     score_val = score.item()
             else:
                 score_val = float(score)
-
-            # print(f"bbox: {bbox.shape}, score: {score_val}, person_keypoints: {person_keypoints.shape}")
             if score_val < detection_threshold:
                 continue
 

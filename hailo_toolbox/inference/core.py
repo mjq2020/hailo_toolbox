@@ -20,13 +20,13 @@ class CallbackType(Enum):
     COLLAT_INFER = "collat_infer"
 
 
-def empty_callback(*args, **kwargs) -> None:
+def empty_callback(args ) -> None:
     """Default empty callback function that does nothing
 
     Returns:
         None
     """
-    pass
+    return args
 
 
 class CallbackRegistry:
@@ -175,7 +175,10 @@ class CallbackRegistry:
             )
 
         if name not in self._callbacks[callback_type]:
-            name = "base"
+            if "base" in self._callbacks[callback_type]:
+                name = "base"
+            else:
+                return empty_callback
 
         callback = self._callbacks[callback_type][name]
 
