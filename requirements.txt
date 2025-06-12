@@ -2,6 +2,7 @@
 opencv-python>=4.5.0
 numpy>=1.19.0
 requests>=2.25.0
+matplotlib>=3.3.0
 
 # Optional dependencies for specific source types
 # Uncomment as needed based on your hardware and requirements

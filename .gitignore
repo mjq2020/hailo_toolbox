@@ -17,3 +17,15 @@ __pycache__
 *-info/
 
 *.log
+
+*.jpg
+*.png
+*.jpeg
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.gif
+*.mp4
+*.avi
+*.mov
