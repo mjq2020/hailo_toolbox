@@ -1,23 +1,30 @@
 from setuptools import setup, find_packages
 
+
+def get_version():
+    with open("hailo_toolbox/__version__.py", "r") as f:
+        version = f.read().strip()
+    version = version.split("=")[1].strip().strip('"')
+    return version
+
+
+def get_install_requires():
+    with open("requirements.txt", "r") as f:
+        install_requires = f.read().splitlines()
+    install_requires = [
+        req.strip() for req in install_requires if not req.startswith("#")
+    ]
+    return install_requires
+
+
 setup(
     name="hailo_toolbox",
-    version="0.1.0",
+    version=get_version(),
     packages=find_packages(),
-    install_requires=[
-        "numpy",
-        "onnx",
-        "onnxruntime",
-        "opencv-python",
-        "pillow",
-        "pyyaml",
-        "tqdm",
-    ],
+    install_requires=get_install_requires(),
     entry_points={
         "console_scripts": [
-            "dl-convert=hailo_toolbox.cli.convert:main",
-            "dl-infer=hailo_toolbox.cli.infer:main",
-            "dl-server=hailo_toolbox.cli.server:main",
+            "hailo-toolbox=hailo_toolbox.cli.infer:main",
         ],
     },
     python_requires=">=3.8",
@@ -31,5 +38,7 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
 )
