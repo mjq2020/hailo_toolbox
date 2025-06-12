@@ -56,7 +56,10 @@ class WebcamSource(BaseSource):
         """
         try:
             # Open the webcam with specified API
-            self.cap = cv2.VideoCapture(self.device_id, self.api_preference)
+            if isinstance(self.device_id, str) and self.device_id.isdigit():
+                self.cap = cv2.VideoCapture(int(self.device_id), self.api_preference)
+            else:
+                self.cap = cv2.VideoCapture(self.device_id, self.api_preference)
 
             if not self.cap.isOpened():
                 raise RuntimeError(f"Failed to open webcam (ID: {self.device_id})")

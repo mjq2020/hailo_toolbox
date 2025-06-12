@@ -151,7 +151,14 @@ def is_webcam(source: Union[str, int, Dict[str, Any], Path]) -> bool:
     """
     Check if the source is a webcam (integer device ID).
     """
-    return isinstance(source, int) and source >= 0
+    if isinstance(source, str):
+        if str(source).isdigit():
+            return True
+        else:
+            return False
+    elif isinstance(source, int):
+        return source >= 0
+    return False
 
 
 def is_ip_camera(source: Union[str, int, Dict[str, Any], Path]) -> bool:
