@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional, List, Dict, Any
 from enum import Enum
 
-from .exceptions import ImageProcessingError, InvalidConfigError
+from ..exceptions import ImageProcessingError, InvalidConfigError
 
 
 class InterpolationMethod(Enum):

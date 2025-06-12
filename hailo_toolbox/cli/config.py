@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     convert_parser = subparsers.add_parser("convert", help="convert model")
 
     convert_parser.add_argument(
-        "--model", "-m", type=str, help="Path to the model file (ONNX format)"
+        "model", type=str, help="Path to the model file (ONNX format)"
     )
 
     convert_parser.add_argument(
@@ -68,13 +68,27 @@ def parse_args() -> argparse.Namespace:
     infer_parser = subparsers.add_parser("infer", help="infer model")
 
     infer_parser.add_argument(
-        "--model", "-m", type=str, help="Path to the model file (ONNX format)"
+        "model", type=str, help="Path to the model file (ONNX format)"
     )
+    infer_parser.add_argument(
+        "--callback",
+        "-c",
+        type=str,
+        help="Callback name",
+    )
+
     infer_parser.add_argument(
         "--source",
         "-s",
         type=str,
         help="Path to the source file (video, image, or camera)",
+    )
+    infer_parser.add_argument(
+        "--task-type",
+        "--task_type",
+        "-tt",
+        type=str,
+        help="Type of the task (detection, segmentation, or keypoint)",
     )
     infer_parser.add_argument(
         "--save",

@@ -16,21 +16,21 @@ from ..utils import setup_logger
 def load_config(config_path: str) -> Dict[str, Any]:
     """
     Load configuration from a YAML or JSON file.
-    
+
     Args:
         config_path: Path to the configuration file.
-        
+
     Returns:
         Configuration dictionary.
     """
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found: {config_path}")
-        
+
     ext = os.path.splitext(config_path)[1].lower()
-    with open(config_path, 'r') as f:
-        if ext in ['.yaml', '.yml']:
+    with open(config_path, "r") as f:
+        if ext in [".yaml", ".yml"]:
             return yaml.safe_load(f)
-        elif ext == '.json':
+        elif ext == ".json":
             return json.load(f)
         else:
             raise ValueError(f"Unsupported config file format: {ext}")
@@ -39,16 +39,16 @@ def load_config(config_path: str) -> Dict[str, Any]:
 def get_converter(framework: str, config: Dict[str, Any]) -> BaseConverter:
     """
     Get the appropriate converter for the specified framework.
-    
+
     Args:
         framework: The source framework ("pytorch", "tensorflow").
         config: Converter configuration.
-        
+
     Returns:
         Appropriate converter instance.
     """
     framework = framework.lower()
-    
+
     if framework == "pytorch" or framework == "torch":
         return PyTorchConverter(**config)
     elif framework == "tensorflow" or framework == "tf":
@@ -60,119 +60,94 @@ def get_converter(framework: str, config: Dict[str, Any]) -> BaseConverter:
 def parse_args() -> argparse.Namespace:
     """
     Parse command-line arguments.
-    
+
     Returns:
         Parsed arguments.
     """
-    parser = argparse.ArgumentParser(description="Convert deep learning models to ONNX format")
-    
-    parser.add_argument(
-        "model_path",
-        type=str,
-        help="Path to the source model file"
+    parser = argparse.ArgumentParser(
+        description="Convert deep learning models to ONNX format"
     )
-    
+
+    parser.add_argument("model_path", type=str, help="Path to the source model file")
+
     parser.add_argument(
         "--framework",
         type=str,
         required=True,
         choices=["pytorch", "torch", "tensorflow", "tf"],
-        help="Source framework of the model"
+        help="Source framework of the model",
     )
-    
+
     parser.add_argument(
         "--output-dir",
         type=str,
         default="converted_models",
-        help="Directory to save the converted model"
+        help="Directory to save the converted model",
     )
-    
-    parser.add_argument(
-        "--output-name",
-        type=str,
-        help="Name for the output ONNX file"
-    )
-    
+
+    parser.add_argument("--output-name", type=str, help="Name for the output ONNX file")
+
     parser.add_argument(
         "--input-shape",
         type=str,
-        help="Input shape for the model (comma-separated integers, e.g., '1,3,224,224')"
+        help="Input shape for the model (comma-separated integers, e.g., '1,3,224,224')",
     )
-    
+
     parser.add_argument(
-        "--opset-version",
-        type=int,
-        default=11,
-        help="ONNX opset version to use"
+        "--opset-version", type=int, default=11, help="ONNX opset version to use"
     )
-    
+
     parser.add_argument(
-        "--dynamic-axes",
-        type=str,
-        help="Dynamic axes configuration (JSON string)"
+        "--dynamic-axes", type=str, help="Dynamic axes configuration (JSON string)"
     )
-    
+
     parser.add_argument(
-        "--config",
-        type=str,
-        help="Path to a YAML or JSON configuration file"
+        "--config", type=str, help="Path to a YAML or JSON configuration file"
     )
-    
+
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+
     parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
+        "--log-file", type=str, default="convert.log", help="Log file name"
     )
-    
-    parser.add_argument(
-        "--log-file",
-        type=str,
-        default="convert.log",
-        help="Log file name"
-    )
-    
-    parser.add_argument(
-        "--log-dir",
-        type=str,
-        default="logs",
-        help="Log directory"
-    )
-    
+
+    parser.add_argument("--log-dir", type=str, default="logs", help="Log directory")
+
     return parser.parse_args()
 
 
 def main() -> int:
     """
     Main entry point for the model conversion CLI.
-    
+
     Returns:
         Exit code (0 for success, non-zero for errors).
     """
     args = parse_args()
-    
+
     # 设置日志
     log_level = "DEBUG" if args.verbose else "INFO"
     logger = setup_logger(
         name="hailo_toolbox.convert",
         level=log_level,
         log_file=args.log_file,
-        log_dir=args.log_dir
+        log_dir=args.log_dir,
     )
-    
+
     try:
         # Load config from file if specified
         config = {}
         if args.config:
             config = load_config(args.config)
             logger.info("已加载配置文件: %s", args.config)
-            
+
         # Override config with command-line arguments
         if args.output_dir:
             config["output_dir"] = args.output_dir
-            
+
         if args.opset_version:
             config["opset_version"] = args.opset_version
-            
+
         if args.input_shape:
             try:
                 # Parse comma-separated input shape
@@ -182,7 +157,7 @@ def main() -> int:
             except Exception as e:
                 logger.error("解析输入形状错误: %s", e)
                 return 1
-                
+
         if args.dynamic_axes:
             try:
                 # Parse JSON dynamic axes configuration
@@ -192,16 +167,16 @@ def main() -> int:
             except Exception as e:
                 logger.error("解析动态轴错误: %s", e)
                 return 1
-                
+
         # Check if model file exists
         if not os.path.exists(args.model_path):
             logger.error("找不到模型文件: %s", args.model_path)
             return 1
-            
+
         # Create output directory if it doesn't exist
         output_dir = config.get("output_dir", "converted_models")
         os.makedirs(output_dir, exist_ok=True)
-        
+
         # Get converter for the specified framework
         try:
             converter = get_converter(args.framework, config)
@@ -209,29 +184,29 @@ def main() -> int:
         except Exception as e:
             logger.error("创建转换器错误: %s", e)
             return 1
-            
+
         # Convert the model
         try:
             logger.info("开始转换模型: %s", args.model_path)
             onnx_path = converter.convert(args.model_path, args.output_name)
             logger.info("模型转换成功: %s", onnx_path)
-            
+
             # Validate the model
             if converter.validate_onnx(onnx_path):
                 logger.info("ONNX模型验证通过")
             else:
                 logger.warning("ONNX模型验证失败")
-                
+
         except Exception as e:
             logger.exception("模型转换错误")
             return 1
-            
+
         return 0
-        
+
     except Exception as e:
         logger.exception("意外错误")
         return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    sys.exit(main())

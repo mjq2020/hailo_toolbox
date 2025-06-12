@@ -3,7 +3,7 @@ import sys
 
 os.environ["HAILO_MONITOR"] = "1"
 
-from typing import Tuple
+from typing import Tuple, Callable
 from hailo_platform import (
     HEF,
     VDevice,
@@ -27,7 +27,6 @@ from hailo_toolbox.utils.timer import Timer
 import time
 from multiprocessing import shared_memory, Process
 from hailo_toolbox.utils.sharememory import ShareMemoryManager
-from hailo_toolbox.process.preprocessor import ImagePreprocessor
 from threading import Thread
 
 
@@ -54,6 +53,7 @@ class HailoInference:
         self.output_queue = None
 
         self.thead_number = 0
+        self.callback_list = []
 
         print(self.input_name, self.output_name, self.input_shape, self.output_shape)
 
@@ -101,7 +101,7 @@ class HailoInference:
                 hef=self.hef, interface=HailoStreamInterface.PCIe
             )
             self.model_name = self.hef.get_network_group_names()[0]
-            batch_size = 60 if self.infer_type == "rec" else 1
+            batch_size = 1
             self.configure_params[self.model_name].batch_size = batch_size
             # self.configure_params.set_batch_size(batch_size)
             self.network_groups = target.configure(self.hef, self.configure_params)
@@ -111,7 +111,7 @@ class HailoInference:
                 self.network_group, format_type=FormatType.UINT8
             )
             self.output_vstreams_params = OutputVStreamParams.make(
-                self.network_group, format_type=FormatType.UINT8
+                self.network_group, format_type=FormatType.FLOAT32
             )
 
             with InferVStreams(
@@ -122,15 +122,20 @@ class HailoInference:
                 while True:
                     shm_info = input_queue.get()
                     image = self.share_memory_manager.read(**shm_info)
-                    with Timer(f"inference_{self.infer_type}"):
-                        results = infer.infer(image)
-                    output_data = self.dequantization(results)
-                    shm_info = self.share_memory_manager.write(
-                        output_data, f"results_{self.infer_type}"
-                    )
+                    image = np.expand_dims(image.astype(np.uint8), axis=0)
+                    # with Timer(f"inference"):
+                    results = infer.infer(image)
+                    # output_data = self.dequantization(results)
+                    results = self.callback(results)
+                    shm_info = self.share_memory_manager.write_dict(results)
                     output_queue.put(shm_info)
 
             self.inited_as_process_flag = True
+
+    def callback(self, results):
+        for callback in self.callback_list:
+            results = callback(results)
+        return results
 
     def init_async_model(self):
         self.device_params = VDevice.create_params()
@@ -159,8 +164,13 @@ class HailoInference:
     def dequantization(
         self, output_data: Dict[str, np.ndarray]
     ) -> Dict[str, np.ndarray]:
-        for value in output_data.values():
-            return (value.astype(np.float32) - self.qp_zero_point) * self.qp_scale
+        for key, value in output_data.items():
+            value = np.array(value[0], dtype=object)
+            value = (
+                value - self.output_quant_info[key]["qp_zero_point"]
+            ) * self.output_quant_info[key]["qp_scale"]
+            output_data[key] = value
+        return output_data
 
     def _initialize_queues(self):
         self.input_queue = Queue()
@@ -175,6 +185,9 @@ class HailoInference:
     def init_all_as_process(self):
         self._init_dequantization_info()
         self._initialize_queues()
+
+    def add_callback(self, callback: Callable):
+        self.callback_list.append(callback)
 
     def start_process(self):
         # if self.is_initialized:
@@ -232,8 +245,13 @@ class HailoInference:
         return res
 
     def init_output_quant_info(self):
-        self.qp_scale = self.hef.get_output_stream_infos()[0].quant_info.qp_scale
-        self.qp_zero_point = self.hef.get_output_stream_infos()[0].quant_info.qp_zp
+        self.output_quant_info = {}
+        for info in self.hef.get_output_stream_infos():
+
+            self.output_quant_info[info.name] = {
+                "qp_scale": info.quant_info.qp_scale,
+                "qp_zero_point": info.quant_info.qp_zp,
+            }
 
     def __del__(self):
         if hasattr(self, "infer_ctx"):
@@ -247,24 +265,17 @@ class HailoInference:
         if not hasattr(self, "infer_ctx"):
             self.__enter__()
 
-    def register_prepostprocess(self, prepostprocess: ImagePreprocessor):
-        self.prepostprocess = prepostprocess
-
     def as_process_inference(self, image: np.ndarray) -> Dict[str, np.ndarray]:
         if not self.is_initialized:
             self.start_process()
-        # with Timer("as_process_inference"):
-        shm_info = self.share_memory_manager.write(
-            image, name=f"image_{self.infer_type}"
-        )
+        shm_info = self.share_memory_manager.write(image, name=f"image_")
         if shm_info:
             self.input_queue.put(shm_info)
         else:
             logger.error("write share memory failed")
             return
-        # with Timer("output_queue.get"):
         shm_info = self.output_queue.get()
-        results = self.share_memory_manager.read(**shm_info)
+        results = self.share_memory_manager.read_dict(shm_info)
 
         return results
 

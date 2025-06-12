@@ -11,15 +11,15 @@ from typing import Optional, Any
 class PreprocessError(Exception):
     """
     Base exception class for preprocessing errors.
-    
+
     This is the parent class for all preprocessing-related exceptions,
     providing a common interface for error handling.
     """
-    
+
     def __init__(self, message: str, details: Optional[dict] = None):
         """
         Initialize the preprocessing error.
-        
+
         Args:
             message (str): Human-readable error message
             details (Optional[dict]): Additional error details for debugging
@@ -27,7 +27,7 @@ class PreprocessError(Exception):
         super().__init__(message)
         self.message = message
         self.details = details or {}
-    
+
     def __str__(self) -> str:
         """Return string representation of the error."""
         if self.details:
@@ -38,16 +38,20 @@ class PreprocessError(Exception):
 class InvalidConfigError(PreprocessError):
     """
     Exception raised when preprocessing configuration is invalid.
-    
+
     This exception is raised when the provided configuration parameters
     are invalid, missing, or incompatible with each other.
     """
-    
-    def __init__(self, message: str, config_field: Optional[str] = None, 
-                 provided_value: Optional[Any] = None):
+
+    def __init__(
+        self,
+        message: str,
+        config_field: Optional[str] = None,
+        provided_value: Optional[Any] = None,
+    ):
         """
         Initialize the invalid configuration error.
-        
+
         Args:
             message (str): Human-readable error message
             config_field (Optional[str]): Name of the invalid configuration field
@@ -58,7 +62,7 @@ class InvalidConfigError(PreprocessError):
             details["config_field"] = config_field
         if provided_value is not None:
             details["provided_value"] = provided_value
-            
+
         super().__init__(message, details)
         self.config_field = config_field
         self.provided_value = provided_value
@@ -67,16 +71,20 @@ class InvalidConfigError(PreprocessError):
 class ImageProcessingError(PreprocessError):
     """
     Exception raised when image processing operations fail.
-    
+
     This exception is raised when operations like resizing, normalization,
     or data type conversion fail due to invalid input or processing errors.
     """
-    
-    def __init__(self, message: str, operation: Optional[str] = None,
-                 image_shape: Optional[tuple] = None):
+
+    def __init__(
+        self,
+        message: str,
+        operation: Optional[str] = None,
+        image_shape: Optional[tuple] = None,
+    ):
         """
         Initialize the image processing error.
-        
+
         Args:
             message (str): Human-readable error message
             operation (Optional[str]): Name of the failed operation
@@ -87,7 +95,7 @@ class ImageProcessingError(PreprocessError):
             details["operation"] = operation
         if image_shape:
             details["image_shape"] = image_shape
-            
+
         super().__init__(message, details)
         self.operation = operation
         self.image_shape = image_shape
@@ -96,16 +104,20 @@ class ImageProcessingError(PreprocessError):
 class UnsupportedFormatError(PreprocessError):
     """
     Exception raised when an unsupported image format is encountered.
-    
+
     This exception is raised when the input image format is not supported
     by the preprocessing pipeline.
     """
-    
-    def __init__(self, message: str, format_type: Optional[str] = None,
-                 supported_formats: Optional[list] = None):
+
+    def __init__(
+        self,
+        message: str,
+        format_type: Optional[str] = None,
+        supported_formats: Optional[list] = None,
+    ):
         """
         Initialize the unsupported format error.
-        
+
         Args:
             message (str): Human-readable error message
             format_type (Optional[str]): The unsupported format type
@@ -116,7 +128,7 @@ class UnsupportedFormatError(PreprocessError):
             details["format_type"] = format_type
         if supported_formats:
             details["supported_formats"] = supported_formats
-            
+
         super().__init__(message, details)
         self.format_type = format_type
-        self.supported_formats = supported_formats 
+        self.supported_formats = supported_formats

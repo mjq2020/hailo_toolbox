@@ -9,18 +9,19 @@ import numpy as np
 from typing import Dict, Any, List, Tuple, Optional, Union
 import logging
 
-from .base import (
+from ..base import (
     BasePostprocessor,
     PostprocessConfig,
     DetectionResult,
     non_max_suppression,
     scale_boxes,
 )
-
+from hailo_toolbox.inference.core import CALLBACK_REGISTRY
 
 logger = logging.getLogger(__name__)
 
 
+@CALLBACK_REGISTRY.registryPostProcessor("yolov8det")
 class YOLOv8DetPostprocessor(BasePostprocessor):
     """
     Postprocessor for YOLOv8 object detection models.
@@ -29,9 +30,8 @@ class YOLOv8DetPostprocessor(BasePostprocessor):
     structured detection results with proper NMS and coordinate scaling.
 
     Supported output formats:
-    - Standard YOLOv8: (batch_size, num_detections, 4 + num_classes)
-    - YOLOv8 with objectness: (batch_size, num_detections, 5 + num_classes)
-    - Multiple output heads: separate boxes, scores, and class predictions
+    1. Non-NMS format: (batch_size, num_detections, 6) - [x1, y1, x2, y2, conf, label]
+    2. NMS format: Multiple outputs that need to be concatenated before NMS processing
     """
 
     def __init__(self, config: Optional[PostprocessConfig] = None):
@@ -53,7 +53,8 @@ class YOLOv8DetPostprocessor(BasePostprocessor):
             ]
 
         logger.info(
-            f"Initialized YOLOv8DetPostprocessor with {self.config.num_classes} classes"
+            f"Initialized YOLOv8DetPostprocessor with {self.config.num_classes} classes, "
+            f"NMS enabled: {self.config.nms}"
         )
 
     def _validate_config(self) -> None:
@@ -104,58 +105,222 @@ class YOLOv8DetPostprocessor(BasePostprocessor):
             ValueError: If output format is not supported
             RuntimeError: If postprocessing fails
         """
-        try:
-            # Extract the main detection output
-            detection_output = self._extract_detection_output(raw_outputs)
+        # try:
+        if self.config.nms:
+            # NMS format: Multiple outputs need to be concatenated
+            return self._postprocess_with_nms(raw_outputs, original_shape)
+        else:
+            # Non-NMS format: Direct output format [x1, y1, x2, y2, conf, label]
+            return self._postprocess_without_nms(raw_outputs, original_shape)
 
-            # Handle batch dimension
-            if len(detection_output.shape) == 3:
-                # Process first batch only
-                detection_output = detection_output[0]
+        # except Exception as e:
+        #     logger.error(f"Error in detection postprocessing: {str(e)}")
+        #     raise RuntimeError(f"Detection postprocessing failed: {str(e)}") from e
 
-            # Parse detections based on output format
-            boxes, scores, class_ids = self._parse_detections(detection_output)
+    def _postprocess_without_nms(
+        self,
+        raw_outputs: Dict[str, np.ndarray],
+        original_shape: Optional[Tuple[int, int]] = None,
+    ) -> DetectionResult:
+        """
+        Postprocess detection outputs without NMS.
+        Expected format: [batch, number, 6] where 6 = [x1, y1, x2, y2, conf, label]
 
-            # Apply confidence filtering
-            valid_detections = scores >= self.config.det_conf_threshold
-            if not np.any(valid_detections):
-                logger.debug("No detections above confidence threshold")
-                return self._create_empty_result()
+        Args:
+            raw_outputs: Dictionary containing raw model outputs
+            original_shape: Original image shape (height, width) for coordinate scaling
 
-            boxes = boxes[valid_detections]
-            scores = scores[valid_detections]
-            class_ids = class_ids[valid_detections]
+        Returns:
+            DetectionResult containing processed detections
+        """
+        # Extract the main detection output
+        detection_output = self._extract_detection_output(raw_outputs)
 
-            # Apply Non-Maximum Suppression if enabled
-            if self.config.nms:
-                keep_indices = self._apply_nms(boxes, scores, class_ids)
-                boxes = boxes[keep_indices]
-                scores = scores[keep_indices]
-                class_ids = class_ids[keep_indices]
+        # Validate output format
+        if len(detection_output.shape) != 3:
+            raise ValueError(
+                f"Expected 3D detection output for non-NMS format, got shape {detection_output.shape}"
+            )
 
-            # Limit number of detections
-            if len(boxes) > self.config.det_max_detections:
-                # Sort by confidence and keep top detections
-                top_indices = np.argsort(scores)[::-1][: self.config.det_max_detections]
-                boxes = boxes[top_indices]
-                scores = scores[top_indices]
-                class_ids = class_ids[top_indices]
+        batch_size, num_detections, num_features = detection_output.shape
+        if num_features != 6:
+            raise ValueError(
+                f"Expected 6 features for non-NMS format [x1, y1, x2, y2, conf, label], "
+                f"got {num_features}"
+            )
 
-            # Scale boxes to original image size if needed
-            if original_shape is not None:
-                boxes = scale_boxes(boxes, original_shape, self.config.input_shape)
+        # Process first batch only
+        detection_output = detection_output[0]  # Shape: (num_detections, 6)
 
+        # Extract components
+        boxes = detection_output[:, :4].astype(np.float32)  # [x1, y1, x2, y2]
+        boxes = self.yxyx_to_xyxy(boxes)
+        scores = detection_output[:, 4].astype(np.float32)  # confidence
+        class_ids = detection_output[:, 5].astype(np.int32)  # class labels
+
+        # Apply confidence filtering
+        valid_detections = scores >= self.config.det_conf_threshold
+        if not np.any(valid_detections):
+            logger.debug("No detections above confidence threshold")
+            return self._create_empty_result()
+
+        boxes = boxes[valid_detections]
+        scores = scores[valid_detections]
+        class_ids = class_ids[valid_detections]
+
+        # Limit number of detections by confidence ranking
+        if len(boxes) > self.config.det_max_detections:
+            # Sort by confidence and keep top detections
+            top_indices = np.argsort(scores)[::-1][: self.config.det_max_detections]
+            boxes = boxes[top_indices]
+            scores = scores[top_indices]
+            class_ids = class_ids[top_indices]
+
+        # Scale boxes to original image size if needed
+        if original_shape is not None:
+            boxes = scale_boxes(boxes, original_shape, self.config.input_shape)
             # Clip boxes to image boundaries
-            if original_shape is not None:
-                boxes = self._clip_boxes(boxes, original_shape)
+            boxes = self._clip_boxes(boxes, original_shape)
 
-            logger.debug(f"Postprocessed {len(boxes)} detections")
+        logger.debug(f"Postprocessed {len(boxes)} detections (without NMS)")
 
-            return DetectionResult(boxes=boxes, scores=scores, class_ids=class_ids)
+        return DetectionResult(boxes=boxes, scores=scores, class_ids=class_ids)
+
+    def yxyx_to_xyxy(self, boxes: np.ndarray) -> np.ndarray:
+        """
+        Convert bounding boxes from yxyx format to xyxy format.
+        """
+        boxes_xyxy = np.zeros_like(boxes)
+        boxes_xyxy[:, 0] = boxes[:, 1]
+        boxes_xyxy[:, 1] = boxes[:, 0]
+        boxes_xyxy[:, 2] = boxes[:, 3]
+        boxes_xyxy[:, 3] = boxes[:, 2]
+        return boxes_xyxy
+
+    def _postprocess_with_nms(
+        self,
+        raw_outputs: Dict[str, np.ndarray],
+        original_shape: Optional[Tuple[int, int]] = None,
+    ) -> DetectionResult:
+        """
+        Postprocess detection outputs with NMS.
+        Multiple outputs are concatenated before NMS processing.
+
+        Args:
+            raw_outputs: Dictionary containing multiple raw model outputs
+            original_shape: Original image shape (height, width) for coordinate scaling
+
+        Returns:
+            DetectionResult containing processed detections
+        """
+        # Concatenate all outputs
+        concatenated_output = self._concatenate_outputs(raw_outputs)
+
+        # Handle batch dimension
+        if len(concatenated_output.shape) == 3:
+            # Process first batch only
+            concatenated_output = concatenated_output[0]
+
+        # Parse detections based on output format
+        boxes, scores, class_ids = self._parse_detections_for_nms(concatenated_output)
+
+        # Apply confidence filtering
+        valid_detections = scores >= self.config.det_conf_threshold
+        if not np.any(valid_detections):
+            logger.debug("No detections above confidence threshold")
+            return self._create_empty_result()
+
+        boxes = boxes[valid_detections]
+        scores = scores[valid_detections]
+        class_ids = class_ids[valid_detections]
+
+        # Apply Non-Maximum Suppression
+        keep_indices = self._apply_nms(boxes, scores, class_ids)
+        boxes = boxes[keep_indices]
+        scores = scores[keep_indices]
+        class_ids = class_ids[keep_indices]
+
+        # Limit number of detections
+        if len(boxes) > self.config.det_max_detections:
+            # Sort by confidence and keep top detections
+            top_indices = np.argsort(scores)[::-1][: self.config.det_max_detections]
+            boxes = boxes[top_indices]
+            scores = scores[top_indices]
+            class_ids = class_ids[top_indices]
+
+        # Scale boxes to original image size if needed
+        if original_shape is not None:
+            boxes = scale_boxes(boxes, original_shape, self.config.input_shape)
+            # Clip boxes to image boundaries
+            boxes = self._clip_boxes(boxes, original_shape)
+
+        logger.debug(f"Postprocessed {len(boxes)} detections (with NMS)")
+
+        return DetectionResult(boxes=boxes, scores=scores, class_ids=class_ids)
+
+    def _concatenate_outputs(self, raw_outputs: Dict[str, np.ndarray]) -> np.ndarray:
+        """
+        Concatenate multiple model outputs for NMS processing.
+
+        Args:
+            raw_outputs: Dictionary of raw model outputs from different stages
+
+        Returns:
+            Concatenated output array
+
+        Raises:
+            ValueError: If outputs cannot be concatenated
+        """
+        if len(raw_outputs) == 0:
+            raise ValueError("No outputs provided for concatenation")
+
+        # Convert to list and sort by key for consistent ordering
+        output_items = sorted(raw_outputs.items())
+        outputs = [output for _, output in output_items]
+
+        # Validate that all outputs have compatible shapes for concatenation
+        first_output = outputs[0]
+        if len(first_output.shape) < 2:
+            raise ValueError(
+                f"Expected at least 2D outputs, got shape {first_output.shape}"
+            )
+
+        # Check if all outputs have the same batch size and feature dimensions
+        batch_size = first_output.shape[0] if len(first_output.shape) >= 3 else 1
+        feature_dim = first_output.shape[-1]
+
+        for i, output in enumerate(outputs[1:], 1):
+            if len(output.shape) != len(first_output.shape):
+                raise ValueError(
+                    f"Output {i} has different number of dimensions: "
+                    f"{len(output.shape)} vs {len(first_output.shape)}"
+                )
+
+            if len(output.shape) >= 3 and output.shape[0] != batch_size:
+                raise ValueError(
+                    f"Output {i} has different batch size: "
+                    f"{output.shape[0]} vs {batch_size}"
+                )
+
+            if output.shape[-1] != feature_dim:
+                raise ValueError(
+                    f"Output {i} has different feature dimension: "
+                    f"{output.shape[-1]} vs {feature_dim}"
+                )
+
+        try:
+            # Concatenate along the detection dimension (axis=1 for 3D, axis=0 for 2D)
+            concat_axis = -2 if len(first_output.shape) >= 3 else 0
+            concatenated = np.concatenate(outputs, axis=concat_axis)
+
+            logger.debug(
+                f"Concatenated {len(outputs)} outputs into shape {concatenated.shape}"
+            )
+
+            return concatenated
 
         except Exception as e:
-            logger.error(f"Error in detection postprocessing: {str(e)}")
-            raise RuntimeError(f"Detection postprocessing failed: {str(e)}") from e
+            raise ValueError(f"Failed to concatenate outputs: {str(e)}") from e
 
     def _extract_detection_output(
         self, raw_outputs: Dict[str, np.ndarray]
@@ -193,16 +358,17 @@ class YOLOv8DetPostprocessor(BasePostprocessor):
                 largest_output = output
 
         if largest_output is not None:
-            logger.warning(f"Using largest output for detection postprocessing")
+            logger.warning("Using largest output for detection postprocessing")
             return largest_output
 
         raise ValueError("Could not identify detection output in raw_outputs")
 
-    def _parse_detections(
+    def _parse_detections_for_nms(
         self, detection_output: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Parse detection output into boxes, scores, and class IDs.
+        Parse detection output for NMS processing.
+        Supports traditional YOLOv8 format with class predictions.
 
         Args:
             detection_output: Raw detection output array
@@ -244,7 +410,7 @@ class YOLOv8DetPostprocessor(BasePostprocessor):
 
         else:
             raise ValueError(
-                f"Unsupported detection output format. "
+                f"Unsupported detection output format for NMS processing. "
                 f"Expected {expected_features_with_obj} or {expected_features_without_obj} features, "
                 f"got {num_features}"
             )

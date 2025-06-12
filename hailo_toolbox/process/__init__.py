@@ -8,8 +8,8 @@ The module is designed with modularity and extensibility in mind, allowing easy 
 and extension for different model requirements.
 """
 
-from .preprocessor import ImagePreprocessor, PreprocessConfig
-from .transforms import (
+from .preprocessor.preprocessor import ImagePreprocessor, PreprocessConfig
+from .preprocessor.transforms import (
     ResizeTransform,
     NormalizationTransform,
     DataTypeTransform,
@@ -18,17 +18,17 @@ from .transforms import (
     InterpolationMethod,
     PaddingMode,
 )
-from .pipeline import PreprocessPipeline
+from .preprocessor.pipeline import PreprocessPipeline
 from .base import (
-    BasePreprocessor, 
-    BasePostprocessor, 
+    BasePreprocessor,
+    BasePostprocessor,
     PostprocessConfig,
     DetectionResult,
     SegmentationResult,
     KeypointResult,
     non_max_suppression,
     scale_boxes,
-    scale_keypoints
+    scale_keypoints,
 )
 from .exceptions import (
     PreprocessError,
@@ -36,53 +36,61 @@ from .exceptions import (
     ImageProcessingError,
     UnsupportedFormatError,
 )
-from .postprocessor_det import YOLOv8DetPostprocessor
-from .postprocessor_seg import YOLOv8SegPostprocessor
-from .postprocessor_kp import YOLOv8KpPostprocessor
+from .postprocessor.postprocessor_det import YOLOv8DetPostprocessor
+from .postprocessor.postprocessor_seg import YOLOv8SegPostprocessor
+from .postprocessor.postprocessor_pe import YOLOv8PosePostprocessor
+from .callback import *
+from .visualization import *
+
+# from .postprocessor_kp import YOLOv8KpPostprocessor
 
 
 def create_preprocessor(config: PreprocessConfig) -> BasePreprocessor:
     """
     Create a preprocessor instance based on configuration.
-    
+
     Args:
         config: Preprocessing configuration
-        
+
     Returns:
         Preprocessor instance
     """
     return ImagePreprocessor(config)
 
 
-def create_postprocessor(task_type: str, config: PostprocessConfig = None) -> BasePostprocessor:
+def create_postprocessor(
+    task_type: str, config: PostprocessConfig = None
+) -> BasePostprocessor:
     """
     Create a postprocessor instance based on task type and configuration.
-    
+
     Args:
         task_type: Type of task ('det', 'seg', 'kp')
         config: Postprocessing configuration
-        
+
     Returns:
         Postprocessor instance
-        
+
     Raises:
         ValueError: If task_type is not supported
     """
     if config is None:
         config = PostprocessConfig()
-    
-    if task_type.lower() in ['det', 'detection']:
+
+    if task_type.lower() in ["det", "detection"]:
         config.det = True
         return YOLOv8DetPostprocessor(config)
-    elif task_type.lower() in ['seg', 'segmentation', 'instance_segmentation']:
+    elif task_type.lower() in ["seg", "segmentation", "instance_segmentation"]:
         config.seg = True
         return YOLOv8SegPostprocessor(config)
-    elif task_type.lower() in ['kp', 'keypoint', 'pose', 'pose_estimation']:
+    elif task_type.lower() in ["kp", "keypoint", "pose", "pose_estimation"]:
         config.kp = True
-        return YOLOv8KpPostprocessor(config)
+        return YOLOv8PosePostprocessor(config)
     else:
-        raise ValueError(f"Unsupported task type: {task_type}. "
-                        f"Supported types: 'det', 'seg', 'kp'")
+        raise ValueError(
+            f"Unsupported task type: {task_type}. "
+            f"Supported types: 'det', 'seg', 'kp'"
+        )
 
 
 __all__ = [
@@ -98,26 +106,22 @@ __all__ = [
     "PaddingMode",
     "PreprocessPipeline",
     "create_preprocessor",
-    
     # Postprocessing
     "BasePostprocessor",
     "PostprocessConfig",
     "DetectionResult",
-    "SegmentationResult", 
+    "SegmentationResult",
     "KeypointResult",
     "YOLOv8DetPostprocessor",
     "YOLOv8SegPostprocessor",
-    "YOLOv8KpPostprocessor",
+    "YOLOv8PosePostprocessor",
     "create_postprocessor",
-    
     # Utility functions
     "non_max_suppression",
     "scale_boxes",
     "scale_keypoints",
-    
     # Base classes
     "BasePreprocessor",
-    
     # Exceptions
     "PreprocessError",
     "InvalidConfigError",

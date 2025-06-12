@@ -19,6 +19,7 @@ class SourceType(Enum):
     CUSTOM = auto()
     IMAGE = auto()
 
+
 class BaseSource(ABC):
     """
     Abstract base class for all video sources.

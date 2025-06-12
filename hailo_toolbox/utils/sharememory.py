@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, AnyStr, List, Union, Dict
+from typing import Tuple, Optional, AnyStr, List, Union, Dict, Any
 from multiprocessing import shared_memory
 from multiprocessing import resource_tracker
 import numpy as np
@@ -59,32 +59,48 @@ class ShareMemoryManager:
         self.shm_dict[name] = shm
         return shm
 
+    def write_dict(self, data: Dict[str, np.ndarray]):
+        shm_info = []
+        for key, value in data.items():
+            key = key.replace("/", "_")
+            if isinstance(value, np.ndarray):
+                shm_info.append(self.write(value, key))
+            elif isinstance(value, list):
+                value = np.array(value, dtype=object)
+                shm_info.append(self.write(value, key))
+        return shm_info
+
+    def read_dict(self, shm_info: List[Dict[str, Any]]):
+        data = {}
+        for info in shm_info:
+            if isinstance(info, dict):
+                data[info["name"]] = self.read(**info)
+        return data
+
     def write(self, data: np.ndarray, name: str, size: Optional[int] = None):
         shape = data.shape
         size = data.nbytes
         dtype = data.dtype.name
-        try:
-            if name not in self.shm_dict:
-                try:
-                    shm = UntrackedSharedMemory(
-                        name=name, create=True, size=self.max_size
-                    )
-                except FileExistsError:
-                    shm = UntrackedSharedMemory(name=name, size=self.max_size)
-                self.shm_dict[name] = shm
-            else:
-                shm = self.shm_dict[name]
-            shm.buf[:size] = data.tobytes()
+        # try:
+        if name not in self.shm_dict:
+            try:
+                shm = UntrackedSharedMemory(name=name, create=True, size=self.max_size)
+            except FileExistsError:
+                shm = UntrackedSharedMemory(name=name, size=self.max_size)
+            self.shm_dict[name] = shm
+        else:
+            shm = self.shm_dict[name]
+        shm.buf[:size] = data.tobytes()
 
-            return {
-                "name": name,
-                "size": size,
-                "shape": shape,
-                "dtype": dtype,
-            }
-        except Exception as e:
-            print(f"write {name} failed: {e}")
-            return False
+        return {
+            "name": name,
+            "size": size,
+            "shape": shape,
+            "dtype": dtype,
+        }
+        # except Exception as e:
+        #     print(f"write {name} failed: {e}")
+        #     return False
 
     def read(
         self, name: str, size: int, dtype: Union[np.dtype, str], shape: Tuple[int, ...]

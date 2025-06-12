@@ -16,14 +16,14 @@ from .base import BaseSource, SourceType
 class ImageSource(BaseSource):
     """
     Image source that reads from a local image file, folder, or URL.
-    
+
     Supports single images, image folders, and network image URLs.
     """
-    
+
     def __init__(self, source_id: str, config: Optional[Dict[str, Any]] = None):
         """
         Initialize an image source.
-        
+
         Args:
             source_id: Unique identifier for this source.
             config: Configuration dictionary containing:
@@ -35,26 +35,27 @@ class ImageSource(BaseSource):
         """
         super().__init__(source_id, config)
         self.source_type = SourceType.IMAGE
-        
+
         # Image specific configs
         self.source_path = self.config.get("source_path")
         if not self.source_path:
             raise ValueError("source_path must be provided for ImageSource")
-            
-        self.supported_formats = self.config.get("supported_formats", [
-            ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".gif"
-        ])
+
+        self.supported_formats = self.config.get(
+            "supported_formats",
+            [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp", ".gif"],
+        )
         self.loop = self.config.get("loop", True)
         self.sort_files = self.config.get("sort_files", True)
         self.timeout = self.config.get("timeout", 10)
-        
+
         # Internal state
         self.image_files = []
         self.current_index = 0
         self.is_url = self._is_url(self.source_path)
         self.is_folder = False
         self.current_image = None
-        
+
     def _is_url(self, path: str) -> bool:
         """Check if the path is a URL."""
         try:
@@ -62,88 +63,88 @@ class ImageSource(BaseSource):
             return all([result.scheme, result.netloc])
         except:
             return False
-            
+
     def _load_image_from_url(self, url: str) -> Optional[np.ndarray]:
         """
         Load image from URL.
-        
+
         Args:
             url: Image URL.
-            
+
         Returns:
             Image as numpy array or None if failed.
         """
         try:
             response = requests.get(url, timeout=self.timeout, stream=True)
             response.raise_for_status()
-            
+
             # Convert response content to numpy array
             image_array = np.asarray(bytearray(response.content), dtype=np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-            
+
             if image is None:
                 raise ValueError(f"Failed to decode image from URL: {url}")
-                
+
             return image
-            
+
         except Exception as e:
             print(f"Error loading image from URL {url}: {e}")
             return None
-            
+
     def _load_image_from_file(self, file_path: str) -> Optional[np.ndarray]:
         """
         Load image from local file.
-        
+
         Args:
             file_path: Path to image file.
-            
+
         Returns:
             Image as numpy array or None if failed.
         """
         try:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"Image file not found: {file_path}")
-                
+
             image = cv2.imread(file_path, cv2.IMREAD_COLOR)
             if image is None:
                 raise ValueError(f"Failed to load image: {file_path}")
-                
+
             return image
-            
+
         except Exception as e:
             print(f"Error loading image from file {file_path}: {e}")
             return None
-            
+
     def _scan_folder(self, folder_path: str) -> List[str]:
         """
         Scan folder for image files.
-        
+
         Args:
             folder_path: Path to folder.
-            
+
         Returns:
             List of image file paths.
         """
         image_files = []
-        
+
         for ext in self.supported_formats:
             # Case insensitive search
             pattern = os.path.join(folder_path, f"*{ext}")
             image_files.extend(glob.glob(pattern))
             pattern = os.path.join(folder_path, f"*{ext.upper()}")
             image_files.extend(glob.glob(pattern))
-            
+
         # Remove duplicates and sort if requested
         image_files = list(set(image_files))
         if self.sort_files:
             image_files.sort()
-            
+
         return image_files
-        
+
     def open(self) -> bool:
         """
         Open the image source.
-        
+
         Returns:
             True if source opened successfully, False otherwise.
         """
@@ -155,113 +156,117 @@ class ImageSource(BaseSource):
             else:
                 # Local path
                 path = Path(self.source_path)
-                
+
                 if path.is_file():
                     # Single image file
                     if path.suffix.lower() not in self.supported_formats:
                         raise ValueError(f"Unsupported image format: {path.suffix}")
                     self.image_files = [str(path)]
                     self.is_folder = False
-                    
+
                 elif path.is_dir():
                     # Image folder
                     self.image_files = self._scan_folder(str(path))
                     if not self.image_files:
-                        raise ValueError(f"No supported image files found in folder: {path}")
+                        raise ValueError(
+                            f"No supported image files found in folder: {path}"
+                        )
                     self.is_folder = True
-                    
+
                 else:
                     raise FileNotFoundError(f"Path does not exist: {path}")
-                    
+
             self.current_index = 0
             self.is_opened = True
             return True
-            
+
         except Exception as e:
             print(f"Error opening image source {self.source_id}: {e}")
             self.is_opened = False
             return False
-            
+
     def read(self) -> Tuple[bool, Optional[np.ndarray]]:
         """
         Read the next image.
-        
+
         Returns:
             Tuple of (success, image).
         """
         if not self.is_opened or not self.image_files:
             return False, None
-            
+
         # Check if we've reached the end
         if self.current_index >= len(self.image_files):
             if self.loop and self.is_folder:
                 self.current_index = 0  # Reset to beginning
             else:
                 return False, None  # End of images
-                
+
         # Load current image
         current_path = self.image_files[self.current_index]
-        
+
         if self.is_url:
             image = self._load_image_from_url(current_path)
         else:
             image = self._load_image_from_file(current_path)
-            
+
         if image is None:
             # Skip this image and try next
             self.current_index += 1
             return self.read()
-            
+
         # Resize if needed
         if image.shape[1] != self.resolution[0] or image.shape[0] != self.resolution[1]:
             image = cv2.resize(image, self.resolution)
-            
+
         self.current_image = image
         self.current_index += 1
-        
+
         return True, image
-        
+
     def close(self) -> None:
         """Close the image source."""
         self.current_image = None
         self.is_opened = False
-        
+
     def get_info(self) -> Dict[str, Any]:
         """
         Get information about the image source.
-        
+
         Returns:
             Dictionary with information about the image source.
         """
         info = super().get_info()
-        info.update({
-            "source_path": self.source_path,
-            "is_url": self.is_url,
-            "is_folder": self.is_folder,
-            "total_images": len(self.image_files),
-            "current_index": self.current_index,
-            "supported_formats": self.supported_formats,
-            "loop": self.loop
-        })
+        info.update(
+            {
+                "source_path": self.source_path,
+                "is_url": self.is_url,
+                "is_folder": self.is_folder,
+                "total_images": len(self.image_files),
+                "current_index": self.current_index,
+                "supported_formats": self.supported_formats,
+                "loop": self.loop,
+            }
+        )
         return info
-        
+
     def seek(self, index: int) -> bool:
         """
         Seek to a specific image index (only for folders).
-        
+
         Args:
             index: Image index to seek to.
-            
+
         Returns:
             True if seek was successful, False otherwise.
         """
         if not self.is_opened or not self.is_folder:
             return False
-            
+
         if 0 <= index < len(self.image_files):
             self.current_index = index
             return True
-            
+
         return False
 
 
@@ -300,14 +305,23 @@ class VideoSource(BaseSource):
 
         # Check if it's a network stream
         self.is_network_stream = self._is_network_stream(self.file_path)
-        
+
         if not self.is_network_stream:
             # Extract file info for local files
             self.file_name = os.path.basename(self.file_path)
             self.file_extension = os.path.splitext(self.file_name)[1].lower()
 
             # Check supported formats for local files
-            self.supported_extensions = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v"]
+            self.supported_extensions = [
+                ".mp4",
+                ".avi",
+                ".mov",
+                ".mkv",
+                ".webm",
+                ".flv",
+                ".wmv",
+                ".m4v",
+            ]
             if self.file_extension not in self.supported_extensions:
                 raise ValueError(
                     f"Unsupported file format: {self.file_extension}. Supported formats: {self.supported_extensions}"
@@ -318,7 +332,14 @@ class VideoSource(BaseSource):
 
     def _is_network_stream(self, path: str) -> bool:
         """Check if the path is a network stream URL."""
-        network_protocols = ["http://", "https://", "rtsp://", "rtmp://", "udp://", "tcp://"]
+        network_protocols = [
+            "http://",
+            "https://",
+            "rtsp://",
+            "rtmp://",
+            "udp://",
+            "tcp://",
+        ]
         return any(path.startswith(protocol) for protocol in network_protocols)
 
     def open(self) -> bool:
@@ -385,7 +406,7 @@ class VideoSource(BaseSource):
             return False, None
 
         ret, frame = self.cap.read()
-        
+
         if not self.is_network_stream:
             self.current_frame_idx += 1
 

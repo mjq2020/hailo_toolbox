@@ -106,7 +106,7 @@ class BaseConverter(ABC):
         if path.suffix != ".hn":
             raise ValueError("he input file must be in HN format.")
         self._hn_file = path
-    
+
     @property
     def tf_file(self) -> Path:
         return self._tf_file
@@ -116,6 +116,7 @@ class BaseConverter(ABC):
         if path.suffix != ".tf":
             raise ValueError("he input file must be in TF format.")
         self._tf_file = path
+
     @property
     def start_node_names(self) -> List[str]:
         return self._start_node_names
