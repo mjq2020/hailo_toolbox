@@ -1,151 +1,344 @@
-# Deep Learning Toolbox
+# Hailo Toolbox Inference Tutorial
 
-一个用于深度学习模型转换和推理的工具箱，提供了强大的功能和灵活的架构。
+This comprehensive tutorial will guide you through running inference with the Hailo Toolbox framework. The toolbox supports both Hailo (.hef) and ONNX models with various input sources and customizable processing pipelines.
 
-## 主要功能
+## Table of Contents
 
-1. **模型转换**：将PyTorch、TensorFlow等框架的模型转换为ONNX格式
-2. **多种视频源支持**：支持从IP摄像头、USB摄像头、MIPI摄像头、本地视频文件等输入源进行推理
-3. **自定义推理处理**：允许用户定义回调函数处理模型推理结果
-4. **多路视频流**：支持单路和多路视频源的同步处理
-5. **命令行工具**：提供了便捷的命令行接口
+- [Installation and Configuration](#installation-and-configuration)
+- [Basic Usage](#basic-usage)
+- [Command Line Arguments](#command-line-arguments)
+- [Inference Command](#inference-command)
+- [Input Source Types](#input-source-types)
+- [Callback Functions](#callback-functions)
+- [Practical Usage Examples](#practical-usage-examples)
 
-## 安装
+## Installation and Configuration
+
+### Installation
+
+Ensure you have installed the Hailo Toolbox:
 
 ```bash
 pip install -e .
 ```
 
-## 使用方法
+### Verify Installation
 
-### 模型转换
-
-将PyTorch模型转换为ONNX格式：
+Check version information:
 
 ```bash
-dl-convert model.pth --framework pytorch --input-shape 1,3,224,224
+hailo-toolbox --version
 ```
 
-将TensorFlow模型转换为ONNX格式：
+## Basic Usage
+
+### Command Structure
+
+Hailo Toolbox CLI uses a subcommand structure:
 
 ```bash
-dl-convert model.h5 --framework tensorflow --input-shape 1,224,224,3
+hailo-toolbox <subcommand> [arguments]
 ```
 
-### 模型推理
+Supported subcommands:
+- `infer`: Model inference
+- `convert`: Model conversion
 
-使用USB摄像头进行推理：
+### Simple Inference Example
+
+Run inference on a video file:
 
 ```bash
-dl-infer model.onnx --source-type webcam --visualize
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source sources/test.mp4
 ```
 
-使用视频文件进行推理：
+## Command Line Arguments
+
+### Global Arguments
+
+#### Version Information
+- `--version` / `-v` / `-V`: Display version information and exit
+  ```bash
+  hailo-toolbox --version
+  ```
+
+## Inference Command
+
+### Basic Syntax
 
 ```bash
-dl-infer model.onnx --source-type file --source-path video.mp4 --visualize
+hailo-toolbox infer <model_path> -c <callback> --source <input_source> [OPTIONS]
 ```
 
-使用IP摄像头进行推理：
+### Required Arguments
+
+#### model (positional argument)
+- **Purpose**: Specify the path to the model file
+- **Type**: String
+- **Supported formats**: .hef and .onnx formats
+- **Examples**:
+  ```bash
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4
+  hailo-toolbox infer models/yolov8n.onnx -c yolov8det --source video.mp4
+  ```
+
+#### --callback / -c (required)
+- **Purpose**: Specify callback function name for custom processing and visualization
+- **Type**: String
+- **Required**: Yes
+- **Common values**: `yolov8det`, `yolov8seg`, `yolov8pose`
+- **Examples**:
+  ```bash
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4
+  hailo-toolbox infer models/yolov8n_seg.hef -c yolov8seg --source video.mp4
+  ```
+
+#### --source / -s (required)
+- **Purpose**: Specify input source (video file, image file, folder, or camera)
+- **Type**: String
+- **Required**: Yes
+- **Supported formats**:
+  - Video files: `.mp4`, `.avi`, `.mov`, `.mkv`, etc.
+  - Image files: `.jpg`, `.png`, `.bmp`, `.tiff`, etc.
+  - Image folders: Directory containing image files
+  - Cameras: `0`, `1` (device ID)
+  - IP cameras: `rtsp://...`
+- **Examples**:
+  ```bash
+  # Video file
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4
+  
+  # Image file
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source image.jpg
+  
+  # Image folder
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source images/
+  
+  # Webcam
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source 0
+  ```
+
+### Optional Arguments
+
+#### --save / -sv
+- **Purpose**: Save output video (flag parameter)
+- **Type**: Boolean flag
+- **Default**: False
+- **Example**:
+  ```bash
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4 --save
+  ```
+
+#### --save-path / -sp
+- **Purpose**: Specify path to save output video
+- **Type**: String
+- **Default**: Auto-generated
+- **Example**:
+  ```bash
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4 --save --save-path output/result.mp4
+  ```
+
+#### --show / -sh
+- **Purpose**: Display output video in real-time (flag parameter)
+- **Type**: Boolean flag
+- **Default**: False
+- **Example**:
+  ```bash
+  hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4 --show
+  ```
+
+## Input Source Types
+
+### Supported Input Sources
+
+1. **Video Files**
+   - Formats: MP4, AVI, MOV, MKV, WMV, etc.
+   - Example: `--source video.mp4`
+
+2. **Image Files**
+   - Formats: JPG, PNG, BMP, TIFF, WEBP, etc.
+   - Example: `--source image.jpg`
+
+3. **Image Folders**
+   - Format: Directory path containing image files
+   - Example: `--source images/`
+   - Processes all supported image files in the directory
+
+4. **USB Cameras**
+   - Format: Device ID (integer)
+   - Example: `--source 0` (default camera)
+
+5. **IP Cameras**
+   - Format: RTSP stream address
+   - Example: `--source rtsp://username:password@ip:port/stream`
+
+## Callback Functions
+
+### Built-in Callback Functions
+
+- `yolov8det`: YOLOv8 object detection
+- `yolov8seg`: YOLOv8 semantic segmentation
+- `yolov8pose`: YOLOv8 pose estimation
+
+### Callback Function Responsibilities
+
+Callback functions handle:
+- **Preprocessing**: Input data preparation
+- **Postprocessing**: Model output processing
+- **Visualization**: Result rendering and display
+
+## Practical Usage Examples
+
+### 1. Object Detection - Video Processing
 
 ```bash
-dl-infer model.onnx --source-type ip_camera --source-path rtsp://username:password@ip_address:port/stream
+# Basic detection
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4
+
+# Detection with saved results
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4 --save --save-path output/detection_result.mp4
+
+# Real-time display of detection results
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source video.mp4 --show
 ```
 
-### 启动推理服务器
+### 2. Object Detection - Image Processing
 
 ```bash
-dl-server --config server_config.yaml
+# Process single image
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source image.jpg --save
+
+# Process image folder
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source images/ --save
+
+# Batch process with custom output path
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source images/ --save --save-path output/
 ```
 
-## 项目结构
-
-- `hailo_toolbox/`: 主要包含项目的核心代码
-  - `converters/`: 模型转换相关的代码
-  - `inference/`: 推理引擎相关的代码
-  - `sources/`: 视频源相关的代码
-  - `cli/`: 命令行工具相关的代码
-  - `utils/`: 工具函数和辅助模块
-
-## 扩展
-
-### 添加新的视频源
-
-继承 `BaseSource` 类并实现所需的方法：
-
-```python
-from hailo_toolbox.sources import BaseSource, SourceType
-
-class NewSource(BaseSource):
-    def __init__(self, source_id, config=None):
-        super().__init__(source_id, config)
-        self.source_type = SourceType.CUSTOM
-        # 初始化自定义源
-        
-    def open(self):
-        # 实现打开源的逻辑
-        pass
-        
-    def read(self):
-        # 实现读取帧的逻辑
-        pass
-        
-    def close(self):
-        # 实现关闭源的逻辑
-        pass
-```
-
-### 添加自定义推理回调
-
-创建一个接收 `InferenceResult` 的函数：
-
-```python
-from hailo_toolbox.inference import InferenceResult
-
-def custom_callback(result: InferenceResult):
-    # 处理推理结果
-    if result.success:
-        # 处理raw_outputs或processed_outputs
-        pass
-    else:
-        # 处理错误
-        pass
-```
-
-然后，在推理时使用该回调：
+### 3. Semantic Segmentation
 
 ```bash
-dl-infer model.onnx --source-type webcam --callback mymodule:custom_callback
+# Segmentation task
+hailo-toolbox infer models/yolov8n_seg.hef -c yolov8seg --source video.mp4 --show
+
+# Save segmentation results
+hailo-toolbox infer models/yolov8n_seg.hef -c yolov8seg --source video.mp4 --save --save-path output/segmentation_result.mp4
+
+# Process image folder for segmentation
+hailo-toolbox infer models/yolov8n_seg.hef -c yolov8seg --source images/ --save
 ```
 
-## 配置文件示例
+### 4. Pose Estimation
 
-### 服务器配置
+```bash
+# Pose detection
+hailo-toolbox infer models/yolov8s_pose.hef -c yolov8pose --source video.mp4 --show
 
-```yaml
-models:
-  - id: "model1"
-    path: "/path/to/model.onnx"
-    config:
-      input_name: "input"
-      providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
+# Save pose detection results
+hailo-toolbox infer models/yolov8s_pose.hef -c yolov8pose --source video.mp4 --save --save-path output/pose_result.mp4
 
-sources:
-  - id: "source1"
-    type: "webcam"
-    config:
-      device_id: 0
-      resolution: [640, 480]
-
-pipelines:
-  - id: "pipeline1"
-    source_id: "source1"
-    engine_id: "model1"
-    config:
-      mode: "async"
-      show_fps: true
+# Process image folder for pose estimation
+hailo-toolbox infer models/yolov8s_pose.hef -c yolov8pose --source images/ --save
 ```
 
-## 许可证
+### 5. Real-time Camera Inference
 
-本项目使用MIT许可证。详见LICENSE文件。 
+```bash
+# Use default camera for real-time detection
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source 0 --show
+
+# Use secondary camera
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source 1 --show
+```
+
+### 6. IP Camera Inference
+
+```bash
+# Process RTSP stream
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source rtsp://192.168.1.100:554/stream --show
+```
+
+### 7. ONNX Model Inference
+
+```bash
+# Use ONNX model
+hailo-toolbox infer models/yolov8n.onnx -c yolov8det --source video.mp4 --save
+```
+
+### 8. Batch Processing Script
+
+Create a batch processing script for multiple files:
+
+```bash
+#!/bin/bash
+# batch_inference.sh
+
+MODEL="models/yolov8n.hef"
+CALLBACK="yolov8det"
+INPUT_DIR="input_videos"
+OUTPUT_DIR="output_results"
+
+mkdir -p "$OUTPUT_DIR"
+
+for video in "$INPUT_DIR"/*.mp4; do
+    filename=$(basename "$video" .mp4)
+    echo "Processing $filename..."
+    
+    hailo-toolbox infer "$MODEL" \
+        -c "$CALLBACK" \
+        --source "$video" \
+        --save \
+        --save-path "$OUTPUT_DIR/${filename}_result.mp4"
+done
+
+echo "Batch processing completed!"
+```
+
+### 9. Folder Processing Examples
+
+```bash
+# Process all images in a folder
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source dataset/images/ --save
+
+# Process folder with custom output directory
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source dataset/test/ --save --save-path results/
+
+# Process folder and display results
+hailo-toolbox infer models/yolov8n.hef -c yolov8det --source dataset/demo/ --show
+```
+
+## Best Practices
+
+### 1. Model Selection
+
+- Use smaller models (yolov8n) for real-time applications
+- Use larger models (yolov8s, yolov8m) for higher accuracy requirements
+- Choose task-specific models (detection, segmentation, pose)
+
+### 2. Input Optimization
+
+- Adjust input size to match model input dimensions
+- Use appropriate color space (RGB/BGR)
+- Maintain consistent input data normalization
+
+### 3. Output Management
+
+- Regularly clean output directories
+- Use appropriate compression for saved videos
+- Consider storage limitations for long-running processes
+
+### 4. Resource Management
+
+- Monitor system resources during inference
+- Use appropriate batch sizes
+- Properly clean up resources after processing
+
+## Summary
+
+This tutorial covers the comprehensive usage of the Hailo Toolbox inference system with the latest parameter requirements. The framework provides flexible, high-performance inference capabilities for various deep learning tasks. By following these guidelines and examples, you can effectively leverage the toolbox for your specific use cases.
+
+Note that both `--callback` and `--source` parameters are now required for the inference command, ensuring proper configuration for all inference operations.
+
+## LICENSE
+
+This project uses the MIT license. See the LICENSE file for details.
