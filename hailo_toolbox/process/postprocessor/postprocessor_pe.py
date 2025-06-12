@@ -22,6 +22,7 @@ from ..base import (
     scale_keypoints,
 )
 from hailo_toolbox.inference.core import CALLBACK_REGISTRY
+from hailo_toolbox.process.postprocessor.centerpose_postprocessing import centerpose_postprocessing
 
 
 logger = logging.getLogger(__name__)
@@ -771,6 +772,14 @@ class OpenPosePosePostprocessor(BasePostprocessor):
             raise ValueError(
                 f"Maximum persons must be positive, got {self.config.kp_max_persons}"
             )
+    NODE_LOCAL_DICT = {
+        (160, 1): 0,
+        (160, 2): 1,
+        (160, 34): 2,
+        (160, 2): 3,
+        (160, 17): 4,
+        (160, 2): 5,
+    }
 
     def postprocess(
         self,
@@ -791,61 +800,20 @@ class OpenPosePosePostprocessor(BasePostprocessor):
             ValueError: If output format is not supported
             RuntimeError: If postprocessing fails
         """
-        try:
-            # Extract heatmaps and PAFs
-            heatmaps, pafs = self._extract_heatmaps_and_pafs(raw_outputs)
+        # try:
+        
+        results = centerpose_postprocessing(raw_outputs)
+        
+        return KeypointResult(
+            keypoints=results["keypoints"],
+            scores=results["scores"],
+            boxes=results["bboxes"],
+            joint_scores=results["joint_scores"],
+        )
 
-            # Process first batch only
-            heatmaps = heatmaps[0]
-            pafs = pafs[0]
-
-            # Scale heatmaps and PAFs to original image size
-            if original_shape is not None:
-                heatmaps, pafs = self._scale_heatmaps_and_pafs(
-                    heatmaps, pafs, original_shape
-                )
-
-            # Extract keypoints from heatmaps
-            all_keypoints_by_type = []
-            total_keypoints_num = 0
-
-            for kpt_idx in range(18):  # 18 keypoint types (17 + 1 background)
-                if (
-                    kpt_idx < heatmaps.shape[2]
-                ):  # Ensure we don't exceed available channels
-                    total_keypoints_num += self._extract_keypoints(
-                        heatmaps[:, :, kpt_idx],
-                        all_keypoints_by_type,
-                        total_keypoints_num,
-                    )
-
-            # Group keypoints into poses using PAFs
-            pose_entries, all_keypoints = self._group_keypoints(
-                all_keypoints_by_type, pafs
-            )
-
-            # Convert to COCO format
-            coco_keypoints, scores = self._convert_to_coco_format(
-                pose_entries, all_keypoints
-            )
-
-            # Create result
-            if len(coco_keypoints) > 0:
-                keypoints_array = np.array(coco_keypoints).reshape(-1, 17, 3)
-                scores_array = np.array(scores)
-
-                # Generate bounding boxes from keypoints
-                boxes = self._generate_bounding_boxes(keypoints_array)
-
-                return KeypointResult(
-                    keypoints=keypoints_array, scores=scores_array, boxes=boxes
-                )
-            else:
-                return self._create_empty_keypoint_result()
-
-        except Exception as e:
-            logger.error(f"Error in OpenPose postprocessing: {str(e)}")
-            raise RuntimeError(f"OpenPose postprocessing failed: {str(e)}") from e
+        # except Exception as e:
+        #     logger.error(f"Error in OpenPose postprocessing: {str(e)}")
+        #     raise RuntimeError(f"OpenPose postprocessing failed: {str(e)}") from e
 
     def _extract_heatmaps_and_pafs(
         self, raw_outputs: Dict[str, np.ndarray]

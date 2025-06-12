@@ -1053,7 +1053,7 @@ class SegmentationVisualization(BaseVisualization):
             )
 
 
-@CALLBACK_REGISTRY.registryVisualizer("yolov8pe")
+@CALLBACK_REGISTRY.registryVisualizer("yolov8pe","openpose")
 class KeypointVisualization(BaseVisualization):
     """
     Specialized visualization class for keypoint detection results.
