@@ -6,6 +6,9 @@ from hailo_toolbox.inference.onnx_engine import ONNXInference
 from hailo_toolbox.utils.config import Config
 import numpy as np
 import logging
+import os
+import os.path as osp
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +23,7 @@ class CallbackType(Enum):
     COLLAT_INFER = "collat_infer"
 
 
-def empty_callback(args ) -> None:
+def empty_callback(args) -> None:
     """Default empty callback function that does nothing
 
     Returns:
@@ -463,23 +466,23 @@ class InferenceEngine:
                 )
 
                 # Visualize results
-                try:
+                if self.config.show:
                     vis_image = self.visualization(original_frame, post_results)
 
                     # Save or display the visualization
-                    output_path = f"output/output_frame_{frame_idx:04d}.jpg"
-                    success = self.visualization.save(vis_image, output_path)
-                    if success:
-                        logger.debug(f"Saved visualization to {output_path}")
-
-                    # Optionally display the image (comment out if running headless)
-                    # self.visualization.show(vis_image, f"Frame {frame_idx}", wait_key=False)
-
-                except Exception as e:
-                    logger.error(f"Visualization error: {str(e)}")
-                    import traceback
-
-                    traceback.print_exc()
+                    if self.config.save:
+                        if self.config.save_path is None:
+                            output_path = "output"
+                        else:
+                            output_path = self.config.save_path
+                        os.makedirs(osp.dirname(output_path), exist_ok=True)
+                        output_path = osp.join(
+                            output_path, f"output_frame_{frame_idx:04d}.jpg"
+                        )
+                        success = self.visualization.save(vis_image, output_path)
+                        if success:
+                            logger.debug(f"Saved visualization to {output_path}")
+                    self.visualization.show(vis_image, f"show")
 
     def _call_callback(self, callback_type: CallbackType, frame: np.ndarray):
         if callback_type in self.callback_registry:

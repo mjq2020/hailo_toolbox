@@ -410,7 +410,7 @@ class YOLOv8PosePostprocessor(BasePostprocessor):
         # Scale coordinates to original image size if needed
         if original_shape is not None:
             output = self._scale_output_to_original(output, original_shape, image_dims)
-        print(output.keys())
+
         keypoint_result = KeypointResult(
             keypoints=output["keypoints"],
             scores=output["scores"],

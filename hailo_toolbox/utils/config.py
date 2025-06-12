@@ -106,6 +106,9 @@ class Config:
     postprocess: Any = None
     visualization: Any = None
     task_type: Any = None
+    save: bool = False
+    save_path: Any = None
+    show: bool = False
 
     def __init__(self, config: Dict[AnyStr, Any]):
         if config is not None:

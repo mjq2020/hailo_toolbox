@@ -511,7 +511,6 @@ class BaseVisualization(ABC):
         self,
         image: np.ndarray,
         window_name: str = "Visualization",
-        wait_key: bool = True,
     ) -> None:
         """
         Display image in a window.
@@ -523,9 +522,7 @@ class BaseVisualization(ABC):
         """
         try:
             cv2.imshow(window_name, image)
-            if wait_key:
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
+            cv2.waitKey(1)
         except Exception as e:
             logger.error(f"Error displaying image: {str(e)}")
 
